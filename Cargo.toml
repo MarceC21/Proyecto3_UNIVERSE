@@ -1,0 +1,32 @@
+[package]
+name = "Proyecto3_UNIVERSE"
+version = "0.1.0"
+edition = "2021"
+default-run = "nave_raster"
+
+[lib]
+name = "nave_raster"
+path = "src/lib.rs"
+
+[features]
+default = ["ventana"]
+ventana = ["dep:raylib"]   # sin esta feature solo se compila el renderer (sin ventana)
+
+[dependencies]
+raylib = { version = "6.0.0", features = ["SUPPORT_IMAGE_GENERATION"], optional = true }
+
+[[bin]]
+name = "nave_raster"
+path = "src/main.rs"
+required-features = ["ventana"]
+
+[[bin]]
+name = "exportar"
+path = "src/exportar.rs"
+
+[profile.release]
+opt-level = 3
+
+# En debug el renderer por software iría lentísimo: se optimiza también.
+[profile.dev]
+opt-level = 3
