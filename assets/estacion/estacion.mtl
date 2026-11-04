@@ -1,0 +1,30 @@
+newmtl Casco_gris
+Kd 0.43 0.48 0.51
+
+newmtl Refuerzos_oscuros
+Kd 0.08 0.13 0.16
+
+newmtl Marco_claro
+Kd 0.52 0.62 0.65
+
+newmtl Placa
+Kd 0.38 0.43 0.47
+
+newmtl Panel_solar_azul
+Kd 0.045 0.105 0.29
+
+newmtl Celda_clara
+Kd 0.075 0.16 0.36
+
+newmtl Vidrio
+Kd 0.25 0.67 0.77
+
+newmtl Reflejo
+Kd 0.64 0.91 0.94
+
+newmtl Fondo_de_toberas
+Kd 0.24 0.91 0.94
+
+newmtl Luz_cian
+Kd 0.24 0.94 0.96
+

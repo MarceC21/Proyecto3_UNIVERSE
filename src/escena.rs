@@ -2,6 +2,7 @@
 // Solo los planetas ROTAN sobre su eje (no hay órbitas); todo lo demás es estático.
 use crate::camara::Camara;
 use crate::dibujo::*;
+use crate::estacion::Estacion;
 use crate::generadores as gen;
 use crate::malla::{self, Malla};
 use crate::math::*;
@@ -46,6 +47,7 @@ pub struct Escena {
     mallas: Vec<Malla>,
     shaders: Vec<Box<dyn Shader>>,
     pub cuerpos: Vec<Cuerpo>,
+    pub estacion: Estacion,
     asteroides: Vec<Asteroide>,
     m_cuadrado: usize,
     m_octaedro: usize,
@@ -162,8 +164,10 @@ impl Escena {
             });
         }
 
+        let tierra = cuerpos.iter().find(|c| c.nombre == "Tierra").expect("falta Tierra");
+        let estacion = Estacion::nueva(tierra.pos, cuerpos[0].pos);
         Escena {
-            mallas, shaders, cuerpos, asteroides, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
+            mallas, shaders, cuerpos, estacion, asteroides, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon, s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo,
         }
     }
@@ -182,7 +186,8 @@ impl Escena {
 
     pub fn cuerpo_cercano(&self, p: V3) -> (&'static str, f32) {
         self.cuerpos.iter().map(|c| (c.nombre, (p - c.pos).len() - c.radio))
-            .fold(("", f32::MAX), |a, b| if b.1 < a.1 { b } else { a })
+            .fold(("Estacion", (p - self.estacion.pos).len() - self.estacion.radio),
+                |a, b| if b.1 < a.1 { b } else { a })
     }
 
     // Vistas de demostración: (nombre, posición, objetivo)
@@ -196,6 +201,11 @@ impl Escena {
         }
         v.push(("cinturon".to_string(), v3(95.0, 6.0, 40.0), v3(118.0, 0.0, -30.0)));
         v.push(("limite".to_string(), v3(RADIO_LIMITE - 20.0, 4.0, 0.0), v3(RADIO_LIMITE, 0.0, 0.0)));
+        let mut cam = Camara::nueva(100.0, 100.0);
+        cam.vista_esfera(self.estacion.pos, self.estacion.radio, self.pos_sol());
+        // Más altura para ver el anillo, los brazos y los paneles solares.
+        cam.pos.y += self.estacion.radio * 1.6;
+        v.push(("estacion".to_string(), cam.pos, self.estacion.pos));
         v
     }
 
@@ -253,6 +263,20 @@ impl Escena {
                         rot: Rot::identidad(), escala: unif(1.0), mezcla: Mezcla::Alfa, doble_cara: true, tinte: col, mip: 0.0, dist: 1e6 }, st, out);
                 }
             }
+        }
+
+        // Estación OBJ: cada material conserva su malla y shader. La esfera
+        // envolvente descarta el conjunto antes de transformar sus vértices.
+        let e = &self.estacion;
+        let visible = !aj.culling || cam.esfera_visible(e.pos, e.radio);
+        let distancia = (e.pos - cam.pos).len();
+        for (malla, shader) in &e.partes {
+            st.objetos_total += 1;
+            st.tris_sin_optimizar += malla.idx.len();
+            if !visible { continue; }
+            puesto(Item { malla, shader, pos: e.pos, rot: e.rot, escala: unif(1.0),
+                mezcla: Mezcla::Opaco, doble_cara: false, tinte: v3(1.0, 1.0, 1.0),
+                mip: 0.0, dist: distancia }, st, out);
         }
 
         // Cinturón de asteroides: culling por esfera envolvente + 3 LODs + descarte por tamaño.

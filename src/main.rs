@@ -55,7 +55,8 @@ fn main() {
         // Se conservan 6=cinturón y 7=límite para los controles existentes.
         let teclas = [KeyboardKey::KEY_ZERO, KeyboardKey::KEY_ONE, KeyboardKey::KEY_TWO, KeyboardKey::KEY_THREE,
                       KeyboardKey::KEY_FOUR, KeyboardKey::KEY_FIVE, KeyboardKey::KEY_EIGHT, KeyboardKey::KEY_NINE,
-                      KeyboardKey::KEY_U, KeyboardKey::KEY_N, KeyboardKey::KEY_SIX, KeyboardKey::KEY_SEVEN];
+                      KeyboardKey::KEY_U, KeyboardKey::KEY_N, KeyboardKey::KEY_SIX, KeyboardKey::KEY_SEVEN,
+                      KeyboardKey::KEY_E];
         for (i, k) in teclas.iter().enumerate() {
             if window.is_key_pressed(*k) && i < vistas.len() {
                 cam.pos = vistas[i].1;
@@ -128,6 +129,16 @@ fn main() {
             }
         }
 
+        let estacion = &escena.estacion;
+        if let Some((sx, sy, profundidad)) = cam.proyectar(estacion.pos + nave_raster::math::v3(0.0, estacion.radio, 0.0)) {
+            if profundidad < 160.0 {
+                let distancia = (cam.pos - estacion.pos).len();
+                let texto = format!("Estacion ({:.0})", distancia);
+                d.draw_text(&texto, (ox + sx * escala) as i32 - 50,
+                    (oy + sy * escala) as i32 - 14, 16, Color::new(100, 240, 245, 230));
+            }
+        }
+
         d.draw_rectangle(8, 8, 670, 146, Color::new(0, 0, 0, 170));
         d.draw_text(&format!("{} FPS | velocidad {:.1} | cerca de {} ({:.1})", fps, cam.velocidad_actual, cercano, alt), 16, 14, 16, Color::WHITE);
         d.draw_text(&format!("Objetos {}/{}   Triangulos {} de {} (sin culling/LOD)", st.objetos_enviados, st.objetos_total, st.tris_enviados, st.tris_sin_optimizar), 16, 36, 16, Color::WHITE);
@@ -136,7 +147,7 @@ fn main() {
             if aj.orbitas { "ON" } else { "off" }, if aj.limite { "ON" } else { "off" }), 16, 58, 16, Color::WHITE);
         d.draw_text("WASD mover  Espacio/Ctrl subir/bajar  Shift turbo  Raton/flechas mirar  TAB cursor", 16, 84, 14, Color::LIGHTGRAY);
         d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 104, 14, Color::LIGHTGRAY);
-        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  F1-F3 calidad", 16, 124, 14, Color::LIGHTGRAY);
+        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  E Estacion  F1-F3 calidad", 16, 124, 14, Color::LIGHTGRAY);
 
         if dist_lim < 25.0 {
             let parpadeo = ((tiempo * 6.0).sin() * 0.5 + 0.5) * 120.0 + 135.0;

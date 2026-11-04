@@ -33,21 +33,31 @@ impl Modelo {
         let texto = fs::read_to_string(ruta).map_err(|e| format!("{ruta}: {e}"))?;
         let carpeta = ruta.rsplit_once('/').map(|(c, _)| c).unwrap_or(".");
 
+        let mut materiales = String::new();
+        for linea in texto.lines() {
+            let mut partes = linea.split_whitespace();
+            if partes.next() == Some("mtllib") {
+                if let Some(nombre) = partes.next() {
+                    materiales = fs::read_to_string(format!("{carpeta}/{nombre}")).unwrap_or_default();
+                }
+            }
+        }
+        Self::desde_textos(&texto, &materiales).map_err(|e| format!("{ruta}: {e}"))
+    }
+
+    // También permite empaquetar los recursos con include_str!, sin depender
+    // del directorio desde el que se ejecuta el juego.
+    pub fn desde_textos(texto: &str, mtl: &str) -> Result<Modelo, String> {
         let mut vertices: Vec<Vec3> = Vec::new();
         let mut caras: Vec<Cara> = Vec::new();
         let mut materiales: Vec<Material> = Vec::new();
         let mut indice_mat: HashMap<String, usize> = HashMap::new();
-        let mut colores: HashMap<String, [f32; 3]> = HashMap::new();
+        let colores = leer_mtl(mtl);
         let mut actual = 0usize;
 
         for linea in texto.lines() {
             let mut partes = linea.split_whitespace();
             match partes.next() {
-                Some("mtllib") => {
-                    if let Some(nombre) = partes.next() {
-                        colores = leer_mtl(&format!("{carpeta}/{nombre}"));
-                    }
-                }
                 Some("v") => {
                     let n: Vec<f32> = partes.filter_map(|s| s.parse().ok()).collect();
                     if n.len() >= 3 {
@@ -64,10 +74,20 @@ impl Modelo {
                 }
                 Some("f") => {
                     // Solo nos importa el primer número de cada "v/vt/vn".
-                    let ids: Vec<usize> = partes
-                        .filter_map(|p| p.split('/').next()?.parse::<usize>().ok())
-                        .map(|i| i - 1) // el OBJ cuenta desde 1
-                        .collect();
+                    let ids: Vec<usize> = partes.take_while(|p| !p.starts_with('#'))
+                        .map(|p| {
+                            let i = p.split('/').next().unwrap_or("").parse::<isize>()
+                                .map_err(|_| format!("índice OBJ inválido: {p}"))?;
+                            let id = if i > 0 { i - 1 } else { vertices.len() as isize + i };
+                            if i == 0 || id < 0 || id as usize >= vertices.len() {
+                                return Err(format!("índice OBJ fuera de rango: {i}"));
+                            }
+                            Ok(id as usize)
+                        }).collect::<Result<_, String>>()?;
+                    if ids.len() < 3 { return Err("cara OBJ con menos de tres vértices".into()); }
+                    if materiales.is_empty() {
+                        materiales.push(Material { nombre: "Default".into(), color: [0.7; 3] });
+                    }
                     // Triangulación en abanico: un cuadrado (4) -> 2 triángulos.
                     // (Tu OBJ ya viene triangulado, pero así acepta cualquier cara.)
                     for k in 1..ids.len().saturating_sub(1) {
@@ -78,7 +98,7 @@ impl Modelo {
             }
         }
         if vertices.is_empty() || caras.is_empty() {
-            return Err(format!("{ruta}: el modelo no tiene vértices o caras"));
+            return Err("el modelo no tiene vértices o caras".into());
         }
         Ok(Modelo { vertices, caras, materiales })
     }
@@ -99,9 +119,8 @@ impl Modelo {
     }
 }
 
-fn leer_mtl(ruta: &str) -> HashMap<String, [f32; 3]> {
+fn leer_mtl(texto: &str) -> HashMap<String, [f32; 3]> {
     let mut mapa = HashMap::new();
-    let Ok(texto) = fs::read_to_string(ruta) else { return mapa };
     let mut nombre = String::new();
     for linea in texto.lines() {
         let mut p = linea.split_whitespace();
@@ -117,4 +136,20 @@ fn leer_mtl(ruta: &str) -> HashMap<String, [f32; 3]> {
         }
     }
     mapa
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn indices_invalidos_devuelven_error() {
+        let vertices = "v 0 0 0\nv 1 0 0\nv 0 1 0\n";
+        for cara in ["f 0 2 3", "f 1 2 4", "f -4 -2 -1", "f x 2 3"] {
+            assert!(Modelo::desde_textos(&format!("{vertices}{cara}"), "").is_err());
+        }
+        let m = Modelo::desde_textos(&format!("{vertices}f -3 -2 -1"), "").unwrap();
+        assert_eq!(m.caras[0].v, [0, 1, 2]);
+        assert_eq!(m.materiales.len(), 1);
+    }
 }

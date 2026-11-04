@@ -24,6 +24,42 @@ pub trait Shader: Sync {
     fn shade(&self, f: &Fragmento, c: &Contexto) -> [f32; 4];
 }
 
+// Materiales del OBJ: casco y paneles iluminados; ventanas con reflejo y
+// luces cian emisivas. Todo se evalúa en CPU y escribe en el z-buffer común.
+pub struct ShaderEstacion {
+    color: V3,
+    emisivo: bool,
+    vidrio: bool,
+}
+
+impl ShaderEstacion {
+    pub fn nuevo(nombre: &str, color: V3) -> Self {
+        Self { color,
+            emisivo: nombre == "Luz_cian" || nombre.contains("toberas"),
+            vidrio: nombre == "Vidrio" || nombre == "Reflejo",
+        }
+    }
+}
+
+impl Shader for ShaderEstacion {
+    fn shade(&self, f: &Fragmento, c: &Contexto) -> [f32; 4] {
+        if self.emisivo {
+            return [self.color.x, self.color.y, self.color.z, 1.0];
+        }
+        let n = f.normal.norm();
+        let l = (c.sol - f.pos).norm();
+        let v = (c.cam - f.pos).norm();
+        let luz = luz_toon(n.dot(l));
+        let mut col = self.color * tono_sombra(luz) * luz;
+        if self.vidrio {
+            let reflejo = n.dot((l + v).norm()).max(0.0).powi(24);
+            let fresnel = (1.0 - n.dot(v).max(0.0)).powi(3);
+            col += rgb(155.0, 232.0, 245.0) * (0.20 + 0.35 * fresnel + 0.65 * reflejo);
+        }
+        [col.x, col.y, col.z, 1.0]
+    }
+}
+
 // Iluminación "toon": 3 escalones con bordes suaves (sombra / medio / luz).
 fn luz_toon(ndl: f32) -> f32 {
     0.34 + 0.36 * smoothstep(0.02, 0.10, ndl) + 0.30 * smoothstep(0.42, 0.50, ndl)
