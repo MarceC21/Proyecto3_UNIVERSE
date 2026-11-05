@@ -94,7 +94,7 @@ impl Shader for ShaderPlaneta {
 }
 
 // ---------- Anillos de Saturno: bandas radiales y división de Cassini ----------
-pub struct ShaderAnillos;
+pub struct ShaderAnillos { pub interior: f32, pub exterior: f32 }
 
 impl Shader for ShaderAnillos {
     fn shade(&self, f: &Fragmento, c: &Contexto) -> [f32; 4] {
@@ -105,7 +105,7 @@ impl Shader for ShaderAnillos {
         let hacia_sol = c.sol - f.pos;
         let l = hacia_sol.norm();
         // Sombra del planeta sobre el anillo (radio interior = 1.3 radios).
-        let radio_planeta = (f.pos - f.centro).len() / (1.3 + 0.95 * r);
+        let radio_planeta = (f.pos - f.centro).len() / (self.interior + (self.exterior - self.interior) * r);
         let al_centro = f.centro - f.pos;
         let t = al_centro.dot(l);
         let separacion = (al_centro - l * t).len();

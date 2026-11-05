@@ -49,3 +49,8 @@ pub mod salto;
 #[cfg(feature = "ventana")]
 #[path = "juego/navegacion/mapa.rs"]
 pub mod mapa;
+
+#[path = "galaxias/gargantua/generadores.rs"]
+pub mod generadores_gargantua;
+#[path = "galaxias/gargantua/escena.rs"]
+pub mod gargantua;

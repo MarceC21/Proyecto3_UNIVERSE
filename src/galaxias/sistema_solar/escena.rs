@@ -8,6 +8,7 @@ use crate::malla::{self, Malla};
 use crate::math::*;
 use crate::ruido::*;
 use crate::shader::*;
+use crate::progreso::Galaxia;
 
 // ---- Dimensiones del mundo (unidades arbitrarias) ----
 pub const RADIO_LIMITE: f32 = 350.0; // muro después de Neptuno; cinturón interior intacto
@@ -23,18 +24,18 @@ pub struct Cuerpo {
     pub nombre: &'static str,
     pub pos: V3,
     pub radio: f32,
-    inclinacion: f32,
-    vel_rot: f32,
-    angulo: f32,
-    shader: usize,
-    es_sol: bool,
-    nubes: Option<usize>, // índice de shader de nubes (Tierra)
-    angulo_nubes: f32,
-    orbita: Option<(usize, V3)>, // malla del anillo y su color
-    anillos: Option<(usize, usize)>, // malla local y shader; independiente de la guía orbital
+    pub(crate) inclinacion: f32,
+    pub(crate) vel_rot: f32,
+    pub(crate) angulo: f32,
+    pub(crate) shader: usize,
+    pub(crate) es_sol: bool,
+    pub(crate) nubes: Option<usize>, // índice de shader de nubes (Tierra)
+    pub(crate) angulo_nubes: f32,
+    pub(crate) orbita: Option<(usize, V3)>, // malla del anillo y su color
+    pub(crate) anillos: Vec<(usize, usize)>, // malla local y shader; independiente de la guía orbital
 }
 
-struct Asteroide {
+pub(crate) struct Asteroide {
     pos: V3,
     rot: Rot,
     escala: f32,
@@ -44,22 +45,26 @@ struct Asteroide {
 
 pub struct Escena {
     // Mallas: [0..3] esferas LOD0..2, luego asteroides (TIPOS x 3 LODs), luego decorado.
-    mallas: Vec<Malla>,
-    shaders: Vec<Box<dyn Shader>>,
+    pub(crate) mallas: Vec<Malla>,
+    pub(crate) shaders: Vec<Box<dyn Shader>>,
     pub cuerpos: Vec<Cuerpo>,
-    pub estacion: Estacion,
-    asteroides: Vec<Asteroide>,
-    cols_ast: Vec<(V3, f32)>,
-    m_cuadrado: usize,
-    m_octaedro: usize,
-    m_muro: usize,
-    m_anillo_limite: usize,
-    m_borde_cinturon: [usize; 2],
-    s_asteroide: usize,
-    s_orbita: usize,
-    s_barrera: usize,
-    s_baliza: usize,
-    s_brillo: usize,
+    pub estacion: Option<Estacion>,
+    pub galaxia: Galaxia,
+    pub radio_limite: f32,
+    pub alto_limite: f32,
+    pub cinturon: Option<(f32, f32)>,
+    pub(crate) asteroides: Vec<Asteroide>,
+    pub(crate) cols_ast: Vec<(V3, f32)>,
+    pub(crate) m_cuadrado: usize,
+    pub(crate) m_octaedro: usize,
+    pub(crate) m_muro: usize,
+    pub(crate) m_anillo_limite: usize,
+    pub(crate) m_borde_cinturon: Vec<usize>,
+    pub(crate) s_asteroide: usize,
+    pub(crate) s_orbita: usize,
+    pub(crate) s_barrera: usize,
+    pub(crate) s_baliza: usize,
+    pub(crate) s_brillo: usize,
 }
 
 const TIPOS_AST: usize = 4;
@@ -82,7 +87,7 @@ impl Escena {
         mallas.push(malla::muro(RADIO_LIMITE, -ALTO_LIMITE, ALTO_LIMITE, 192));
         let m_anillo_limite = mallas.len();
         mallas.push(malla::anillo(RADIO_LIMITE - 1.0, RADIO_LIMITE + 1.0, 384, 150.0));
-        let m_borde_cinturon = [mallas.len(), mallas.len() + 1];
+        let m_borde_cinturon = vec![mallas.len(), mallas.len() + 1];
         for r in [CINTURON_INT, CINTURON_EXT] {
             mallas.push(malla::anillo(r - 0.35, r + 0.35, 320, (r * std::f32::consts::TAU / 2.6).round()));
         }
@@ -100,7 +105,7 @@ impl Escena {
         let s_saturno = agregar(Box::new(ShaderPlaneta { tex: gen::saturno(), atmosfera: rgb(248.0, 225.0, 165.0), fuerza_atm: 0.4 }));
         let s_urano = agregar(Box::new(ShaderPlaneta { tex: gen::urano(), atmosfera: rgb(143.0, 235.0, 240.0), fuerza_atm: 0.65 }));
         let s_neptuno = agregar(Box::new(ShaderPlaneta { tex: gen::neptuno(), atmosfera: rgb(72.0, 141.0, 255.0), fuerza_atm: 0.65 }));
-        let s_anillos = agregar(Box::new(ShaderAnillos));
+        let s_anillos = agregar(Box::new(ShaderAnillos { interior: 1.3, exterior: 2.25 }));
         let s_asteroide = agregar(Box::new(ShaderAsteroide { tex: gen::asteroide() }));
         let s_orbita = agregar(Box::new(ShaderOrbita));
         let s_barrera = agregar(Box::new(ShaderBarrera));
@@ -132,8 +137,8 @@ impl Escena {
             let anillos = if nombre == "Saturno" {
                 let i = mallas.len();
                 mallas.push(malla::anillo(1.3, 2.25, 256, 1.0));
-                Some((i, s_anillos))
-            } else { None };
+                vec![(i, s_anillos)]
+            } else { vec![] };
             cuerpos.push(Cuerpo {
                 nombre, pos: v3(dist * a.cos(), 0.0, dist * a.sin()), radio, inclinacion: incl,
                 vel_rot: rot * VEL_ROT, angulo: 0.0, shader, es_sol,
@@ -171,8 +176,10 @@ impl Escena {
             (a.pos, a.escala * radio)
         }).collect();
         let tierra = cuerpos.iter().find(|c| c.nombre == "Tierra").expect("falta Tierra");
-        let estacion = Estacion::nueva(tierra.pos, cuerpos[0].pos);
+        let estacion = Some(Estacion::nueva(tierra.pos, cuerpos[0].pos));
         Escena {
+            galaxia: Galaxia::Solar, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE,
+            cinturon: Some((CINTURON_INT, CINTURON_EXT)),
             mallas, shaders, cuerpos, estacion, asteroides, cols_ast, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon, s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo,
         }
@@ -194,26 +201,33 @@ impl Escena {
 
     pub fn cuerpo_cercano(&self, p: V3) -> (&'static str, f32) {
         self.cuerpos.iter().map(|c| (c.nombre, (p - c.pos).len() - c.radio))
-            .fold(("Estacion", (p - self.estacion.pos).len() - self.estacion.radio),
-                |a, b| if b.1 < a.1 { b } else { a })
+            .fold(self.estacion.as_ref().map(|e| ("Estacion", (p - e.pos).len() - e.radio))
+                .unwrap_or(("", f32::MAX)), |a, b| if b.1 < a.1 { b } else { a })
     }
 
     // Vistas de demostración: (nombre, posición, objetivo)
     pub fn vistas(&self) -> Vec<(String, V3, V3)> {
-        let mut v = vec![("general".to_string(), v3(0.0, ALTO_LIMITE - 5.0, RADIO_LIMITE * 0.9), V3::ZERO)];
+        let mut v = vec![("general".to_string(), v3(0.0, self.alto_limite - 5.0, self.radio_limite * 0.9), V3::ZERO)];
         for c in &self.cuerpos {
             let mut cam = Camara::nueva(100.0, 100.0);
-            cam.vista_esfera(c.pos, c.radio, self.pos_sol());
+            let encuadre = if self.galaxia == Galaxia::Gargantua {
+                c.anillos.iter().map(|(m, _)| self.mallas[*m].radio * 0.6).fold(1.0, f32::max)
+            } else { 1.0 };
+            cam.vista_esfera(c.pos, c.radio * encuadre, self.pos_sol());
             let (f, _, _) = cam.base();
             v.push((c.nombre.to_lowercase(), cam.pos, cam.pos + f));
         }
-        v.push(("cinturon".to_string(), v3(95.0, 6.0, 40.0), v3(118.0, 0.0, -30.0)));
-        v.push(("limite".to_string(), v3(RADIO_LIMITE - 20.0, 4.0, 0.0), v3(RADIO_LIMITE, 0.0, 0.0)));
-        let mut cam = Camara::nueva(100.0, 100.0);
-        cam.vista_esfera(self.estacion.pos, self.estacion.radio, self.pos_sol());
-        // Más altura para ver el anillo, los brazos y los paneles solares.
-        cam.pos.y += self.estacion.radio * 1.6;
-        v.push(("estacion".to_string(), cam.pos, self.estacion.pos));
+        if self.cinturon.is_some() {
+            v.push(("cinturon".to_string(), v3(95.0, 6.0, 40.0), v3(118.0, 0.0, -30.0)));
+        }
+        v.push(("limite".to_string(), v3(self.radio_limite - 20.0, 4.0, 0.0), v3(self.radio_limite, 0.0, 0.0)));
+        if let Some(estacion) = &self.estacion {
+            let mut cam = Camara::nueva(100.0, 100.0);
+            cam.vista_esfera(estacion.pos, estacion.radio, self.pos_sol());
+            // Más altura para ver el anillo, los brazos y los paneles solares.
+            cam.pos.y += estacion.radio * 1.6;
+            v.push(("estacion".to_string(), cam.pos, estacion.pos));
+        }
         v
     }
 
@@ -233,11 +247,11 @@ impl Escena {
             let max = self.mallas[0].idx.len();
             st.objetos_total += 1;
             st.tris_sin_optimizar += max * if c.nubes.is_some() { 2 } else { 1 } + if c.es_sol { 2 } else { 0 };
-            if let Some((m, _)) = c.anillos {
+            for &(m, _) in &c.anillos {
                 st.objetos_total += 1;
                 st.tris_sin_optimizar += self.mallas[m].idx.len();
             }
-            let radio_visible = c.radio * if c.anillos.is_some() { 2.25 } else { 1.1 };
+            let radio_visible = c.radio * c.anillos.iter().map(|(m, _)| self.mallas[*m].radio).fold(1.1, f32::max);
             if aj.culling && !cam.esfera_visible(c.pos, radio_visible) { continue; }
             let d = (c.pos - cam.pos).len().max(0.01);
             let px = c.radio / d * k;
@@ -246,7 +260,7 @@ impl Escena {
             let rot = Rot::rot_z(c.inclinacion).mul(&Rot::rot_y(c.angulo));
             puesto(Item { malla: &self.mallas[lod], shader: self.shaders[c.shader].as_ref(), pos: c.pos, rot,
                 escala: unif(c.radio), mezcla: Mezcla::Opaco, doble_cara: false, tinte: v3(1.0, 1.0, 1.0), mip, dist: d }, st, out);
-            if let Some((m, s)) = c.anillos {
+            for &(m, s) in &c.anillos {
                 puesto(Item { malla: &self.mallas[m], shader: self.shaders[s].as_ref(), pos: c.pos,
                     rot: Rot::rot_z(c.inclinacion), escala: unif(c.radio), mezcla: Mezcla::Alfa,
                     doble_cara: true, tinte: v3(1.0, 1.0, 1.0), mip: 0.0, dist: d }, st, out);
@@ -275,16 +289,17 @@ impl Escena {
 
         // Estación OBJ: cada material conserva su malla y shader. La esfera
         // envolvente descarta el conjunto antes de transformar sus vértices.
-        let e = &self.estacion;
-        let visible = !aj.culling || cam.esfera_visible(e.pos, e.radio);
-        let distancia = (e.pos - cam.pos).len();
-        for (malla, shader) in &e.partes {
-            st.objetos_total += 1;
-            st.tris_sin_optimizar += malla.idx.len();
-            if !visible { continue; }
-            puesto(Item { malla, shader, pos: e.pos, rot: e.rot, escala: unif(1.0),
-                mezcla: Mezcla::Opaco, doble_cara: false, tinte: v3(1.0, 1.0, 1.0),
-                mip: 0.0, dist: distancia }, st, out);
+        if let Some(e) = &self.estacion {
+            let visible = !aj.culling || cam.esfera_visible(e.pos, e.radio);
+            let distancia = (e.pos - cam.pos).len();
+            for (malla, shader) in &e.partes {
+                st.objetos_total += 1;
+                st.tris_sin_optimizar += malla.idx.len();
+                if !visible { continue; }
+                puesto(Item { malla, shader, pos: e.pos, rot: e.rot, escala: unif(1.0),
+                    mezcla: Mezcla::Opaco, doble_cara: false, tinte: v3(1.0, 1.0, 1.0),
+                    mip: 0.0, dist: distancia }, st, out);
+            }
         }
 
         // Cinturón de asteroides: culling por esfera envolvente + 3 LODs + descarte por tamaño.
@@ -324,7 +339,7 @@ impl Escena {
                 rot: Rot::identidad(), escala: unif(1.0), mezcla: Mezcla::Alfa, doble_cara: true, tinte: rgb(255.0, 70.0, 190.0), mip: 0.0, dist: 1e7 }, st, out);
             for i in 0..BALIZAS {
                 let a = i as f32 / BALIZAS as f32 * std::f32::consts::TAU;
-                let pos = v3(RADIO_LIMITE * a.cos(), 0.0, RADIO_LIMITE * a.sin());
+                let pos = v3(self.radio_limite * a.cos(), 0.0, self.radio_limite * a.sin());
                 st.objetos_total += 1;
                 st.tris_sin_optimizar += 8;
                 if aj.culling && !cam.esfera_visible(pos, 9.0) { continue; }

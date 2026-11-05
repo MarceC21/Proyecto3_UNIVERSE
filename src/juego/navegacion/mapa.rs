@@ -30,7 +30,7 @@ impl Mapa {
                 let sobre = ((p.x - x) / 115.0).powi(2) + ((p.y - y) / 65.0).powi(2) <= 1.0;
                 if (clic && sobre) || window.is_key_pressed(*tecla) {
                     let g = GALAXIAS[i];
-                    if g != Galaxia::Solar { self.aviso_bloqueado = !progreso.seleccionar_ruta(g); }
+                    if g != progreso.actual() { self.aviso_bloqueado = !progreso.seleccionar_ruta(g); }
                 }
             }
         }
@@ -79,7 +79,7 @@ impl Mapa {
                     l.circulo(x, y - 3.0, 24.0, Color::BLACK);
                 } else { l.elipse(x, y, 19.0, 9.0, Color::new(226, 239, 255, 255)); }
                 l.texto(&format!("{}  {}", i + 1, g.nombre()), x - 110.0, y + 78.0, 18.0, if elegida { Color::new(139, 255, 192, 255) } else { TEXTO });
-                l.texto(if *g == Galaxia::Solar { "UBICACION ACTUAL" } else if elegida { "RUTA TRAZADA" }
+                l.texto(if *g == progreso.actual() { "UBICACION ACTUAL" } else if elegida { "RUTA TRAZADA" }
                     else if progreso.completada(*g) { "COMPLETADA" } else { "DISPONIBLE" }, x - 85.0, y + 103.0, 14.0, CIAN);
             } else {
                 l.elipse(x, y, 109.0, 55.0, Color::BLACK);
@@ -99,7 +99,8 @@ impl Mapa {
             l.texto(&format!("MOTOR DE SALTO / {}", solicitud.destino.nombre()), 64.0, 688.0, 21.0, CIAN);
             l.rect(64.0, 727.0, 620.0, 7.0, Color::new(37, 53, 67, 255));
             l.rect(64.0, 727.0, 620.0 * salto.carga(), 7.0, CIAN);
-            l.texto(if salto.listo() { "Enlace listo. Escena de destino pendiente." }
+            l.texto(if salto.listo() && !solicitud.destino.implementada() { "Escena de destino pendiente." }
+                else if salto.listo() { "Enlace listo. Preparando llegada..." }
                 else { "Sincronizando el motor desbloqueado en Marte..." }, 720.0, 715.0, 17.0, TEXTO);
         } else if !progreso.mapa_activo() {
             l.texto("TERMINAL DE MARTE PENDIENTE", 64.0, 690.0, 21.0, TEXTO);

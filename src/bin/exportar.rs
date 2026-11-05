@@ -51,12 +51,12 @@ fn main() {
     }
     let cuerpos = escena.esferas();
     let ast = escena.colisionadores_asteroides().to_vec();
-    let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: (CINTURON_INT, CINTURON_EXT) };
+    let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: Some((CINTURON_INT, CINTURON_EXT)) };
     let tierra = escena.cuerpos.iter().find(|c| c.nombre == "Tierra").unwrap();
     let escenarios: Vec<(&str, V3, V3, f32)> = vec![
         ("nave_inicio", nave_raster::nave::INICIO, nave_raster::nave::INICIO + v3(0.0, -0.05, -1.0), 0.0),
         ("nave_tierra", tierra.pos + (escena.pos_sol() - tierra.pos).norm() * 16.0 + v3(6.0, 2.0, 0.0), tierra.pos, 0.0),
-        ("nave_estacion", escena.estacion.pos + v3(0.0, 4.0, 12.0), escena.estacion.pos, 0.0),
+        ("nave_estacion", escena.estacion.as_ref().unwrap().pos + v3(0.0, 4.0, 12.0), escena.estacion.as_ref().unwrap().pos, 0.0),
         ("nave_neptuno", escena.cuerpos[8].pos + (escena.pos_sol() - escena.cuerpos[8].pos).norm() * 24.0, escena.cuerpos[8].pos, 0.0),
         ("nave_cinturon", v3(112.0, 3.0, 30.0), v3(100.0, 0.0, -40.0), 10.0),
         ("nave_turbo", v3(0.0, 8.0, 125.0), v3(0.0, 0.0, 0.0), 40.0),

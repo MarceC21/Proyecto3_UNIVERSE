@@ -18,8 +18,8 @@ impl Salto {
         if !en_vuelo || self.solicitud.is_some() { return false; }
         if distancia_borde > 15.0 { self.inhibido = false; }
         if self.inhibido || !progreso.motor_activo() || !(0.0..=6.0).contains(&distancia_borde) { return false; }
-        let Some(destino) = progreso.ruta().filter(|g| progreso.desbloqueada(*g)) else { return false; };
-        self.solicitud = Some(SolicitudSalto { origen: Galaxia::Solar, destino });
+        let Some(destino) = progreso.ruta().filter(|g| progreso.desbloqueada(*g) && *g != progreso.actual()) else { return false; };
+        self.solicitud = Some(SolicitudSalto { origen: progreso.actual(), destino });
         self.carga = 0.0;
         true
     }

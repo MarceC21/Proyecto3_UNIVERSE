@@ -48,7 +48,7 @@ pub struct Mundo<'a> {
     pub asteroides: &'a [(V3, f32)],
     pub radio_limite: f32,
     pub alto_limite: f32,
-    pub cinturon: (f32, f32),
+    pub cinturon: Option<(f32, f32)>,
 }
 
 // Entrada ya interpretada (la llena main.rs con raylib).
@@ -66,6 +66,7 @@ pub struct Control {
 
 pub struct Nave {
     pub pos: V3,
+    reaparicion: V3,
     pub fwd: V3,
     pub up: V3,
     pub vel: V3,
@@ -92,7 +93,7 @@ impl Nave {
     // Solo física (sin modelo): sirve para las pruebas automáticas.
     pub fn fisica() -> Nave {
         Nave {
-            pos: INICIO, fwd: v3(0.0, -0.05, -1.0).norm(), up: v3(0.0, 1.0, 0.0), vel: V3::ZERO, w: V3::ZERO,
+            pos: INICIO, reaparicion: INICIO, fwd: v3(0.0, -0.05, -1.0).norm(), up: v3(0.0, 1.0, 0.0), vel: V3::ZERO, w: V3::ZERO,
             empuje_visual: 0.0, modo_local: false, local_activo: false, objetivo: V3::ZERO, altura: 100.0,
             velocidad_max: 0.0, integridad: 100.0, golpe: 0.0, destruida: 0.0, inmune: 0.0,
             pivote: v3(0.0, PIVOTE_Y, 0.0), mallas: vec![], shaders: vec![], partes: vec![],
@@ -170,8 +171,10 @@ impl Nave {
         self.ortonormalizar();
     }
 
+    pub fn establecer_reaparicion(&mut self, pos: V3) { self.reaparicion = pos; }
+
     pub fn reaparecer(&mut self) {
-        self.teletransportar(INICIO, INICIO + v3(0.0, -0.05, -1.0));
+        self.teletransportar(self.reaparicion, self.reaparicion + v3(0.0, -0.05, -1.0));
         self.integridad = 100.0;
         self.destruida = 0.0;
         self.golpe = 0.0;
@@ -185,7 +188,7 @@ impl Nave {
     fn limite_velocidad(&self, altura: f32, m: &Mundo, turbo: bool, local: bool) -> f32 {
         let mut v = (altura * 0.7).clamp(2.5, 40.0);
         let r = (self.pos.x * self.pos.x + self.pos.z * self.pos.z).sqrt();
-        let en_cinturon = r > m.cinturon.0 - 6.0 && r < m.cinturon.1 + 6.0 && self.pos.y.abs() < 14.0;
+        let en_cinturon = m.cinturon.is_some_and(|(a, b)| r > a - 6.0 && r < b + 6.0 && self.pos.y.abs() < 14.0);
         if en_cinturon { v = v.min(12.0); }
         if local { v = v.min(7.0); }
         if turbo && !local { v *= if en_cinturon { 1.6 } else { 3.0 }; }
@@ -376,14 +379,14 @@ mod pruebas {
     use crate::escena::*;
 
     fn mundo<'a>(cuerpos: &'a [(V3, f32)], ast: &'a [(V3, f32)]) -> Mundo<'a> {
-        Mundo { cuerpos, asteroides: ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: (CINTURON_INT, CINTURON_EXT) }
+        Mundo { cuerpos, asteroides: ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: Some((CINTURON_INT, CINTURON_EXT)) }
     }
 
     #[test]
     fn impacto_en_un_cuadro_largo_no_atraviesa_roca() {
         let ast = [(V3::ZERO, 1.0)];
         let m = Mundo { cuerpos: &[], asteroides: &ast, radio_limite: 1000.0,
-            alto_limite: 1000.0, cinturon: (104.0, 136.0) };
+            alto_limite: 1000.0, cinturon: Some((104.0, 136.0)) };
         let mut n = Nave::fisica();
         n.teletransportar(v3(0.0, 0.0, -6.0), V3::ZERO);
         n.vel = v3(0.0, 0.0, 400.0);

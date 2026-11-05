@@ -5,6 +5,8 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Galaxia { Solar, Gargantua, TauCeti, Eridani }
 
+impl Default for Galaxia { fn default() -> Self { Self::Solar } }
+
 pub const GALAXIAS: [Galaxia; 4] = [Galaxia::Solar, Galaxia::Gargantua, Galaxia::TauCeti, Galaxia::Eridani];
 impl Galaxia {
     pub fn indice(self) -> usize { self as usize }
@@ -12,12 +14,14 @@ impl Galaxia {
         match self { Self::Solar => "SISTEMA SOLAR", Self::Gargantua => "GARGANTUA",
             Self::TauCeti => "TAU CETI", Self::Eridani => "40 ERIDANI A" }
     }
+    pub fn implementada(self) -> bool { matches!(self, Self::Solar | Self::Gargantua) }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Progreso {
     completadas: [bool; 4],
     ruta: Option<Galaxia>,
+    actual: Galaxia,
 }
 
 impl Progreso {
@@ -25,6 +29,14 @@ impl Progreso {
     pub fn mapa_activo(&self) -> bool { self.marte_completado() }
     pub fn motor_activo(&self) -> bool { self.marte_completado() }
     pub fn ruta(&self) -> Option<Galaxia> { self.ruta }
+    pub fn actual(&self) -> Galaxia { self.actual }
+    pub fn viajar(&mut self, destino: Galaxia) -> bool {
+        if !self.motor_activo() || destino == self.actual || !destino.implementada() || !self.desbloqueada(destino) { return false; }
+        self.actual = destino;
+        // Navegar no completa la misión de Miller ni revela Tau Ceti.
+        self.ruta = Some(if destino == Galaxia::Solar { Galaxia::Gargantua } else { Galaxia::Solar });
+        true
+    }
     pub fn desbloqueada(&self, g: Galaxia) -> bool {
         g == Galaxia::Solar || self.completadas[g.indice() - 1]
     }
@@ -39,7 +51,7 @@ impl Progreso {
         true
     }
     pub fn seleccionar_ruta(&mut self, g: Galaxia) -> bool {
-        if !self.mapa_activo() || g == Galaxia::Solar || !self.desbloqueada(g) { return false; }
+        if !self.mapa_activo() || g == self.actual || !self.desbloqueada(g) { return false; }
         self.ruta = Some(g);
         true
     }
@@ -50,6 +62,25 @@ impl Progreso {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn viajar_a_gargantua_y_volver_no_completa_miller_ni_revela_tau_ceti() {
+        let mut p = Progreso::default();
+        assert!(!p.viajar(Galaxia::Gargantua));
+        p.completar_marte();
+        assert!(p.viajar(Galaxia::Gargantua));
+        assert_eq!(p.actual(), Galaxia::Gargantua);
+        assert_eq!(p.ruta(), Some(Galaxia::Solar));
+        assert!(!p.desbloqueada(Galaxia::TauCeti));
+        assert!(!p.completada(Galaxia::Gargantua));
+        assert!(!p.viajar(Galaxia::TauCeti));
+        let mut salto = crate::salto::Salto::default();
+        assert!(salto.observar(&p, 2.0, true));
+        assert_eq!(salto.solicitud().unwrap().origen, Galaxia::Gargantua);
+        assert_eq!(salto.solicitud().unwrap().destino, Galaxia::Solar);
+        assert!(p.viajar(Galaxia::Solar));
+        assert!(p.marte_completado());
+        assert_eq!(p.ruta(), Some(Galaxia::Gargantua));
+    }
     #[test]
     fn marte_desbloquea_solo_el_primer_destino_y_no_se_repite() {
         let mut p = Progreso::default();

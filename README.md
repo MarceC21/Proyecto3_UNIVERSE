@@ -94,16 +94,62 @@ Con el motor desbloqueado y una ruta trazada, acercarse a **6 unidades del lími
 radial** activa automáticamente la sincronización del salto. Solo lo activa la
 nave viva, nunca la cámara libre. Sin el motor, el límite conserva su colisión.
 
-Por ahora la siguiente galaxia no está implementada: al completar la carga se
-muestra **Enlace listo. Escena de destino pendiente.** La solicitud de salto
-conserva origen y destino para conectar esa escena después; no se simula una
-llegada a una galaxia inexistente. Cierra el aviso para volver a una posición
-segura dentro del sistema. El motor permanece desbloqueado y no hay consumo
-ni inventario de combustible todavía.
+Al completar los dos segundos de sincronización se carga **Gargantua** con su
+propio cielo, límites y punto de aparición. El mapa muestra la ubicación actual.
+Desde Gargantua puedes seleccionar el sistema solar y regresar llegando al borde.
+**X** o **Escape** permiten cancelar la sincronización y volver a una posición
+segura del sistema actual. Viajar no completa Miller ni desbloquea Tau Ceti.
+El motor permanece desbloqueado durante la sesión; no hay inventario ni consumo
+de combustible todavía.
 
 El juego no lee ni escribe archivos de partida. Cada ejecución comienza con
 Marte pendiente, motor y mapa bloqueados y sin ruta. Si existe un archivo antiguo
 `partidas/progreso.txt`, se ignora; no hace falta borrarlo para empezar de nuevo.
+
+## Gargantua: navegación
+
+Para inspeccionar directamente el nuevo sistema:
+
+```bash
+cargo run --release -- --galaxia gargantua
+```
+
+Ese acceso inicia una sesión de inspección con el motor ya habilitado. El inicio
+normal con `cargo run --release` conserva la misión de Marte y el mapa bloqueado.
+También se puede combinar `--galaxia solar|gargantua` con una ruta OBJ de nave.
+
+Gargantua tiene un **sol gigante provisional** en el centro. El agujero negro,
+la gravedad especial y la misión de Miller se implementarán después. Sus seis
+planetas son Miller (océano, el más cercano), Mann (hielo agrietado), Edmunds
+(roca), Thalos (bandas y dos anillos separados), Nyx (fisuras) y Aurora (mares
+y continentes). Las posiciones orbitales permanecen fijas y rotan con `dt`.
+
+No tiene cinturón, asteroides ni estación. El radio del límite es 420 y la altura
+75, frente a 350 y 45 del sistema solar. Los planetas tienen radios entre 7 y 11;
+las mismas tres mallas de esfera y los mipmaps conservan el presupuesto de detalle.
+El skybox usa azul petróleo, turquesa y luz crema, sin la nebulosa violeta de Solar.
+
+Se conservan WASD, ratón, turbo, cámara libre, modo local, colisiones y reaparición.
+Los atajos cambian según el sistema:
+
+| Tecla | Destino en Gargantua |
+| --- | --- |
+| 0 | Vista general |
+| 1 | Centro Gargantua |
+| 2 | Miller |
+| 3 | Mann |
+| 4 | Edmunds |
+| 5 | Thalos, doble anillo |
+| 6 | Nyx |
+| 7 | Aurora |
+| 8 | Límite |
+
+`R` reaparece en el sistema actual. En el sistema solar los controles anteriores
+permanecen iguales. Para generar vistas y medir los tiempos sin ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_gargantua -- /tmp/gargantua
+```
 
 ## Organización
 
@@ -111,9 +157,12 @@ Marte pendiente, motor y mapa bloqueados y sin ruta. Si existe un archivo antigu
 - `src/juego/navegacion/nave.rs`: carga del modelo, vuelo, modo local, colisiones y emisión de mallas.
 - `src/juego/navegacion/seguimiento.rs`: cámara de seguimiento de la nave.
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
+- `src/galaxias/gargantua/`: configuración del segundo sistema y sus seis texturas.
+- `src/motor/cielo.rs`: generador de skybox para cada sistema.
 - `assets/compartidos/nave/`: OBJ y MTL copiados del proyecto previo `Lab4/nave_raster`.
 - `assets/galaxias/sistema_solar/estacion/`: modelo, materiales y generador de la estación.
-- `src/bin/exportar.rs`: vistas sin ventana, incluidas nave, estación y planetas exteriores.
+- `src/bin/exportar.rs`: vistas del sistema solar sin ventana.
+- `src/bin/exportar_gargantua.rs`: vistas y tiempos del nuevo sistema sin ventana.
 - `src/minijuegos/puzzle/turing.rs`: reglas, validación, cinta y ejecución de la máquina.
 - `src/juego/estados/marte.rs`: llegada, descenso, terminal y salida de Marte.
 - `src/juego/estados/progreso.rs`: desbloqueos de la partida actual, solo en memoria.

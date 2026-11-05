@@ -4,7 +4,7 @@ use nave_raster::{
     camara::{Camara, Entrada},
     cielo::Cielo,
     dibujo::Ajustes,
-    escena::{Escena, ALTO_LIMITE, CINTURON_EXT, CINTURON_INT, RADIO_LIMITE},
+    escena::Escena,
     math::{v3, V3},
     nave::{Control, Mundo, Nave},
     raster::Framebuffer,
@@ -13,7 +13,7 @@ use nave_raster::{
 use nave_raster::seguimiento::Seguimiento;
 use nave_raster::mision_marte::{FaseMarte, MisionMarte};
 use nave_raster::terminal_marte::TerminalMarte;
-use nave_raster::progreso::Progreso;
+use nave_raster::progreso::{Galaxia, Progreso};
 use nave_raster::salto::Salto;
 use nave_raster::mapa::Mapa;
 use raylib::prelude::*;
@@ -30,7 +30,19 @@ fn resolucion(calidad: usize) -> (usize, usize) {
 }
 
 fn main() {
-    let ruta = std::env::args().nth(1);
+    let mut args = std::env::args().skip(1);
+    let mut ruta = None;
+    let mut galaxia_inicial = Galaxia::Solar;
+    while let Some(arg) = args.next() {
+        if arg == "--galaxia" {
+            galaxia_inicial = match args.next().as_deref() {
+                Some("gargantua") => Galaxia::Gargantua,
+                Some("solar") => Galaxia::Solar,
+                _ => { eprintln!("Usa --galaxia solar o --galaxia gargantua"); std::process::exit(1); }
+            };
+        } else if ruta.is_none() { ruta = Some(arg); }
+        else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
+    }
     let mut nave = match ruta.as_deref() {
         Some(ruta) => Nave::cargar(ruta),
         None => Nave::predeterminada(),
@@ -42,15 +54,19 @@ fn main() {
     window.disable_cursor();
 
     println!("Generando texturas y sistema solar...");
-    let mut escena = Escena::nueva();
-    let cielo = Cielo::nuevo();
+    let mut escena = if galaxia_inicial == Galaxia::Gargantua { Escena::gargantua() } else { Escena::nueva() };
+    let mut cielo = if galaxia_inicial == Galaxia::Gargantua { Cielo::gargantua() } else { Cielo::nuevo() };
+    if galaxia_inicial == Galaxia::Gargantua {
+        nave.establecer_reaparicion(nave_raster::gargantua::INICIO);
+        nave.reaparecer();
+    }
 
     let mut calidad = 1usize;
     let (mut rw, mut rh) = resolucion(calidad);
     let mut fb = Framebuffer::new(rw, rh);
     let mut cam = Camara::nueva(rw as f32, rh as f32);
     let mut seguimiento = Seguimiento::nuevo(nave.fwd, nave.up);
-    let vistas = escena.vistas();
+    let mut vistas = escena.vistas();
 
     let mut textura: Option<Texture2D> = None;
     let mut aj = Ajustes::default();
@@ -61,6 +77,12 @@ fn main() {
     let mut terminal_marte = TerminalMarte::default();
     // Cada ejecución es una partida nueva; el avance vive solo en memoria.
     let mut progreso = Progreso::default();
+    if galaxia_inicial == Galaxia::Gargantua {
+        // Acceso de inspección; la partida normal conserva el desbloqueo de Marte.
+        progreso.completar_marte();
+        progreso.viajar(Galaxia::Gargantua);
+        mision_marte.marcar_completada();
+    }
     let mut salto = Salto::default();
     let mut mapa = Mapa::default();
     let mut mapa_abierto = false;
@@ -96,14 +118,32 @@ fn main() {
         if mapa_abierto {
             salto.actualizar(dt);
             let cerrar = mapa.cuadro(&mut window, &thread, &mut progreso, &salto, tiempo, textura.as_ref(), mapa_recien_abierto);
+            if !cerrar && salto.listo() {
+                if let Some(solicitud) = salto.solicitud().filter(|s| s.destino.implementada()) {
+                    if progreso.viajar(solicitud.destino) {
+                        let gargantua = solicitud.destino == Galaxia::Gargantua;
+                        escena = if gargantua { Escena::gargantua() } else { Escena::nueva() };
+                        cielo = if gargantua { Cielo::gargantua() } else { Cielo::nuevo() };
+                        vistas = escena.vistas();
+                        nave.establecer_reaparicion(if gargantua { nave_raster::gargantua::INICIO } else { nave_raster::nave::INICIO });
+                        nave.reaparecer();
+                        nave.modo_local = false;
+                        seguimiento.reiniciar(nave.fwd, nave.up);
+                        camara_libre = false;
+                        salto.volver();
+                        mapa_abierto = false;
+                        if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+                    }
+                }
+            }
             if cerrar {
                 mapa_abierto = false;
                 if salto.solicitud().is_some() {
-                    // Mientras no exista la próxima escena, conservar el evento
-                    // durante el aviso y regresar a una posición segura al cerrar.
+                    // Cancelar la sincronización devuelve la nave a una posición
+                    // segura dentro del sistema que se estaba explorando.
                     salto.volver();
                     let radial = v3(nave.pos.x, 0.0, nave.pos.z).norm();
-                    let pos = radial * (RADIO_LIMITE - 22.0) + v3(0.0, nave.pos.y, 0.0);
+                    let pos = radial * (escena.radio_limite - 22.0) + v3(0.0, nave.pos.y, 0.0);
                     nave.teletransportar(pos, pos - radial);
                     seguimiento.reiniciar(nave.fwd, nave.up);
                 }
@@ -139,20 +179,26 @@ fn main() {
                 cam.fov = 62f32.to_radians();
             }
         }
-        // Se conservan todos los destinos del sistema actual. T visita la estación; E es alabeo.
-        let teclas = [KeyboardKey::KEY_ZERO, KeyboardKey::KEY_ONE, KeyboardKey::KEY_TWO, KeyboardKey::KEY_THREE,
-                      KeyboardKey::KEY_FOUR, KeyboardKey::KEY_FIVE, KeyboardKey::KEY_EIGHT, KeyboardKey::KEY_NINE,
-                      KeyboardKey::KEY_U, KeyboardKey::KEY_N, KeyboardKey::KEY_SIX, KeyboardKey::KEY_SEVEN,
-                      KeyboardKey::KEY_T];
-        for (i, k) in teclas.iter().enumerate() {
-            if window.is_key_pressed(*k) && i < vistas.len() {
-                if camara_libre {
-                    cam.pos = vistas[i].1;
-                    cam.vel = V3::ZERO;
-                    cam.mirar_a(vistas[i].2);
-                } else {
-                    nave.teletransportar(vistas[i].1, vistas[i].2);
-                    seguimiento.reiniciar(nave.fwd, nave.up);
+        let teclas = if escena.galaxia == Galaxia::Solar {
+            vec![(KeyboardKey::KEY_ZERO, "general"), (KeyboardKey::KEY_ONE, "sol"),
+                (KeyboardKey::KEY_TWO, "mercurio"), (KeyboardKey::KEY_THREE, "venus"),
+                (KeyboardKey::KEY_FOUR, "tierra"), (KeyboardKey::KEY_FIVE, "marte"),
+                (KeyboardKey::KEY_EIGHT, "jupiter"), (KeyboardKey::KEY_NINE, "saturno"),
+                (KeyboardKey::KEY_U, "urano"), (KeyboardKey::KEY_N, "neptuno"),
+                (KeyboardKey::KEY_SIX, "cinturon"), (KeyboardKey::KEY_SEVEN, "limite"),
+                (KeyboardKey::KEY_T, "estacion")]
+        } else {
+            vec![(KeyboardKey::KEY_ZERO, "general"), (KeyboardKey::KEY_ONE, "gargantua"),
+                (KeyboardKey::KEY_TWO, "miller"), (KeyboardKey::KEY_THREE, "mann"),
+                (KeyboardKey::KEY_FOUR, "edmunds"), (KeyboardKey::KEY_FIVE, "thalos"),
+                (KeyboardKey::KEY_SIX, "nyx"), (KeyboardKey::KEY_SEVEN, "aurora"),
+                (KeyboardKey::KEY_EIGHT, "limite")]
+        };
+        for (tecla, nombre) in teclas {
+            if window.is_key_pressed(tecla) {
+                if let Some((_, pos, objetivo)) = vistas.iter().find(|v| v.0 == nombre) {
+                    if camara_libre { cam.pos = *pos; cam.vel = V3::ZERO; cam.mirar_a(*objetivo); }
+                    else { nave.teletransportar(*pos, *objetivo); seguimiento.reiniciar(nave.fwd, nave.up); }
                 }
             }
         }
@@ -187,7 +233,7 @@ fn main() {
                 giro_y: giro.y,
                 turbo: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
             };
-            cam.actualizar(&entrada, dt, &cuerpos, RADIO_LIMITE, ALTO_LIMITE);
+            cam.actualizar(&entrada, dt, &cuerpos, escena.radio_limite, escena.alto_limite);
         } else {
             let control = Control {
                 empuje: eje(KeyboardKey::KEY_W, KeyboardKey::KEY_S, &window),
@@ -202,22 +248,22 @@ fn main() {
             let mundo = Mundo {
                 cuerpos: &cuerpos,
                 asteroides: escena.colisionadores_asteroides(),
-                radio_limite: RADIO_LIMITE,
-                alto_limite: ALTO_LIMITE,
-                cinturon: (CINTURON_INT, CINTURON_EXT),
+                radio_limite: escena.radio_limite,
+                alto_limite: escena.alto_limite,
+                cinturon: escena.cinturon,
             };
             nave.actualizar(&control, dt, &mundo);
             seguimiento.actualizar(&mut cam, nave.pos, nave.fwd, nave.up, nave.velocidad(), dt,
                 if orbitando { Some((raton.x, raton.y)) } else { None }, &cuerpos);
         }
 
-        let marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte").expect("falta Marte");
-        let altura_marte = (nave.pos - marte.pos).len() - marte.radio;
+        let altura_marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte")
+            .map(|c| (nave.pos - c.pos).len() - c.radio).unwrap_or(f32::INFINITY);
         if mision_marte.observar(altura_marte, nave.velocidad(), !camara_libre && nave.destruida <= 0.0) {
             nave.vel = V3::ZERO;
             window.enable_cursor();
         }
-        let distancia_borde_nave = RADIO_LIMITE - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
+        let distancia_borde_nave = escena.radio_limite - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
         if salto.observar(&progreso, distancia_borde_nave,
             !camara_libre && nave.destruida <= 0.0 && mision_marte.fase == FaseMarte::Espacio) {
             nave.vel = V3::ZERO;
@@ -243,7 +289,7 @@ fn main() {
         let (ox, oy) = ((sw - dw) * 0.5, (sh - dh) * 0.5);
         let referencia = if camara_libre { cam.pos } else { nave.pos };
         let (cercano, alt) = escena.cuerpo_cercano(referencia);
-        let dist_lim = RADIO_LIMITE - (referencia.x * referencia.x + referencia.z * referencia.z).sqrt();
+        let dist_lim = escena.radio_limite - (referencia.x * referencia.x + referencia.z * referencia.z).sqrt();
         let fps = window.get_fps();
         let punto_mira = cam.proyectar(nave.pos + nave.fwd * 40.0);
 
@@ -262,12 +308,13 @@ fn main() {
                 }
             }
         }
-        let estacion = &escena.estacion;
-        if let Some((sx, sy, profundidad)) = cam.proyectar(estacion.pos + v3(0.0, estacion.radio, 0.0)) {
-            if profundidad < 160.0 {
-                let texto = format!("Estacion ({:.0})", (referencia - estacion.pos).len());
-                d.draw_text(&texto, (ox + sx * escala) as i32 - 50,
-                    (oy + sy * escala) as i32 - 14, 16, Color::new(100, 240, 245, 230));
+        if let Some(estacion) = &escena.estacion {
+            if let Some((sx, sy, profundidad)) = cam.proyectar(estacion.pos + v3(0.0, estacion.radio, 0.0)) {
+                if profundidad < 160.0 {
+                    let texto = format!("Estacion ({:.0})", (referencia - estacion.pos).len());
+                    d.draw_text(&texto, (ox + sx * escala) as i32 - 50,
+                        (oy + sy * escala) as i32 - 14, 16, Color::new(100, 240, 245, 230));
+                }
             }
         }
         // Mira: hacia dónde apunta la nariz.
@@ -292,8 +339,13 @@ fn main() {
         d.draw_text("WASD mover  Espacio/Ctrl subir/bajar  Q/E alabeo  Raton/flechas girar  Shift turbo", 16, 84, 14, Color::LIGHTGRAY);
         d.draw_text("Clic derecho orbitar camara  F modo local  R reaparecer  V camara libre  TAB cursor", 16, 104, 14, Color::LIGHTGRAY);
 
-        d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 124, 14, Color::LIGHTGRAY);
-        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+        if escena.galaxia == Galaxia::Solar {
+            d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 124, 14, Color::LIGHTGRAY);
+            d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+        } else {
+            d.draw_text("GARGANTUA: 0 general  1 centro  2 Miller  3 Mann  4 Edmunds  5 Thalos", 16, 124, 14, Color::LIGHTGRAY);
+            d.draw_text("6 Nyx  7 Aurora  8 limite  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+        }
 
         // Modo local (rodear un cuerpo).
         let objetivo_local = escena.cuerpos.iter().min_by(|a, b|
