@@ -13,7 +13,17 @@ use nave_raster::{
 use nave_raster::seguimiento::Seguimiento;
 use nave_raster::mision_marte::{FaseMarte, MisionMarte};
 use nave_raster::terminal_marte::TerminalMarte;
+use nave_raster::progreso::Progreso;
+use nave_raster::salto::Salto;
+use nave_raster::mapa::Mapa;
 use raylib::prelude::*;
+
+fn completar_marte(mision: &mut MisionMarte, progreso: &mut Progreso) {
+    if mision.maquina.aceptada() {
+        mision.marcar_completada();
+        progreso.completar_marte();
+    }
+}
 
 fn resolucion(calidad: usize) -> (usize, usize) {
     match calidad { 1 => (960, 600), 2 => (720, 450), _ => (480, 300) }
@@ -49,6 +59,11 @@ fn main() {
     let mut camara_libre = false;
     let mut mision_marte = MisionMarte::default();
     let mut terminal_marte = TerminalMarte::default();
+    // Cada ejecución es una partida nueva; el avance vive solo en memoria.
+    let mut progreso = Progreso::default();
+    let mut salto = Salto::default();
+    let mut mapa = Mapa::default();
+    let mut mapa_abierto = false;
 
     while !window.window_should_close() {
         let dt = window.get_frame_time().clamp(0.0005, 0.1);
@@ -58,14 +73,40 @@ fn main() {
         // entrada: al seleccionar botones nunca se mueve ni daña la nave.
         if mision_marte.fase != FaseMarte::Espacio {
             mision_marte.actualizar(dt);
+            completar_marte(&mut mision_marte, &mut progreso);
             if terminal_marte.cuadro(&mut window, &thread, &mut mision_marte, &nave, tiempo, textura.as_ref()) {
                 mision_marte.despegar();
+                completar_marte(&mut mision_marte, &mut progreso);
                 let marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte").expect("falta Marte");
                 let radial = (escena.pos_sol() - marte.pos).norm();
                 let pos = marte.pos + radial * (marte.radio + 12.0);
                 nave.teletransportar(pos, pos + radial);
                 nave.modo_local = false;
                 seguimiento.reiniciar(nave.fwd, nave.up);
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            }
+            continue;
+        }
+        // Abrir y dibujar en el mismo cuadro: EndDrawing actualiza el teclado.
+        let mapa_recien_abierto = !mapa_abierto && window.is_key_pressed(KeyboardKey::KEY_M);
+        if mapa_recien_abierto {
+            mapa_abierto = true;
+            window.enable_cursor();
+        }
+        if mapa_abierto {
+            salto.actualizar(dt);
+            let cerrar = mapa.cuadro(&mut window, &thread, &mut progreso, &salto, tiempo, textura.as_ref(), mapa_recien_abierto);
+            if cerrar {
+                mapa_abierto = false;
+                if salto.solicitud().is_some() {
+                    // Mientras no exista la próxima escena, conservar el evento
+                    // durante el aviso y regresar a una posición segura al cerrar.
+                    salto.volver();
+                    let radial = v3(nave.pos.x, 0.0, nave.pos.z).norm();
+                    let pos = radial * (RADIO_LIMITE - 22.0) + v3(0.0, nave.pos.y, 0.0);
+                    nave.teletransportar(pos, pos - radial);
+                    seguimiento.reiniciar(nave.fwd, nave.up);
+                }
                 if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
             }
             continue;
@@ -176,6 +217,14 @@ fn main() {
             nave.vel = V3::ZERO;
             window.enable_cursor();
         }
+        let distancia_borde_nave = RADIO_LIMITE - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
+        if salto.observar(&progreso, distancia_borde_nave,
+            !camara_libre && nave.destruida <= 0.0 && mision_marte.fase == FaseMarte::Espacio) {
+            nave.vel = V3::ZERO;
+            nave.modo_local = false;
+            mapa_abierto = true;
+            window.enable_cursor();
+        }
 
         let st = dibujar(&mut fb, &escena, &cielo, &cam, tiempo, &aj, Some(&nave));
 
@@ -244,7 +293,7 @@ fn main() {
         d.draw_text("Clic derecho orbitar camara  F modo local  R reaparecer  V camara libre  TAB cursor", 16, 104, 14, Color::LIGHTGRAY);
 
         d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 124, 14, Color::LIGHTGRAY);
-        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
 
         // Modo local (rodear un cuerpo).
         let objetivo_local = escena.cuerpos.iter().min_by(|a, b|
@@ -256,12 +305,12 @@ fn main() {
         if let Some(t) = local_txt {
             d.draw_text(&t, 16, (sh as i32) - 60, 18, Color::new(120, 255, 240, 255));
         }
-        if !camara_libre && altura_marte < 18.0 {
+        if !camara_libre && altura_marte < 18.0 && !mision_marte.completada() {
             d.draw_text("MARTE: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
                 16, sh as i32 - 88, 17, Color::new(255, 190, 132, 255));
         }
-        if mision_marte.maquina.aceptada() {
-            d.draw_text("MOTOR INTERESTELAR: PROTOCOLO ACTIVADO", sw as i32 - 440, sh as i32 - 30,
+        if progreso.motor_activo() {
+            d.draw_text("MOTOR LISTO / [M] MAPA INTERESTELAR", sw as i32 - 400, sh as i32 - 30,
                 17, Color::new(131, 239, 163, 255));
         }
 
@@ -280,7 +329,9 @@ fn main() {
         }
         if dist_lim < 25.0 {
             let parpadeo = ((tiempo * 6.0).sin() * 0.5 + 0.5) * 120.0 + 135.0;
-            d.draw_text("LIMITE DEL SISTEMA SOLAR", (sw as i32 - 360) / 2, 192, 28, Color::new(255, 90, 200, parpadeo as u8));
+            let texto = if progreso.motor_activo() { "LIMITE: RUTA DE SALTO PREPARADA [M]" }
+                else { "LIMITE: ACTIVA EL MOTOR EN MARTE" };
+            d.draw_text(texto, (sw as i32 - 560) / 2, 192, 24, Color::new(255, 90, 200, parpadeo as u8));
         }
     }
 }

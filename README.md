@@ -42,6 +42,7 @@ motores están configurados para el modelo incluido.
 | 6 / 7 | Cinturón / límite |
 | 8 / 9 / U / N | Júpiter / Saturno / Urano / Neptuno |
 | T | Estación junto a la Tierra |
+| M | Mapa interestelar; M, X o Escape para cerrarlo |
 
 Los atajos trasladan la nave en modo seguimiento y la cámara en modo libre.
 Las colisiones de la nave con planetas y asteroides usan subpasos, rebote,
@@ -66,15 +67,43 @@ geometría, ruido y shaders del rasterizador en CPU.
   **Izquierda/Derecha** para cambiar su opción; **1–4** seleccionan una regla.
 - Una transición inválida conserva la cinta y el estado. Una válida anima la
   escritura y el cabezal y carga una etapa del reactor.
-- Al alcanzar `qf` en cuatro transiciones, el protocolo del motor queda activado
-  durante la sesión. El inventario, el mapa y el salto se conectarán después.
+- Al alcanzar `qf` en cuatro transiciones se desbloquean el motor, el mapa y la
+  ruta a Gargantua. Marte queda completado y la terminal no vuelve a abrirse
+  durante esa partida. Al cerrar y ejecutar de nuevo, hay que completarlo otra vez.
 - **Salir**, **X** o **Escape** devuelven la nave al espacio desde el aterrizaje,
   las instrucciones o la terminal. Si una transición ya era válida, se completa
-  al salir. El progreso se conserva al volver a Marte,
-  hasta cerrar el programa. No se crea aún un archivo de guardado.
+  al salir. Si no has terminado, puedes regresar y continuar durante la sesión.
+  El avance, los desbloqueos y la ruta se conservan solo en memoria mientras
+  está abierto el juego. Al reiniciar se vuelve a empezar desde cero.
 
 La simulación de vuelo se pausa mientras estás en la terminal. En el espacio,
 Escape sigue cerrando el programa.
+
+## Mapa y preparación del salto
+
+Pulsa **M** para consultar el mapa. Al principio solo tu sistema tiene nombre;
+los otros tres destinos son siluetas negras sin identidad. La carta indica que
+la terminal de Marte está pendiente y no permite trazar rutas bloqueadas.
+
+Completar Marte revela **Gargantua** y la selecciona como ruta inicial. Puedes
+seleccionar los destinos disponibles con clic o **1–4**. Tau Ceti y 40 Eridani A
+siguen ocultos; sus futuras misiones desbloquearán las siguientes rutas en orden.
+El mapa pausa el vuelo y se cierra con **M**, **X** o **Escape**.
+
+Con el motor desbloqueado y una ruta trazada, acercarse a **6 unidades del límite
+radial** activa automáticamente la sincronización del salto. Solo lo activa la
+nave viva, nunca la cámara libre. Sin el motor, el límite conserva su colisión.
+
+Por ahora la siguiente galaxia no está implementada: al completar la carga se
+muestra **Enlace listo. Escena de destino pendiente.** La solicitud de salto
+conserva origen y destino para conectar esa escena después; no se simula una
+llegada a una galaxia inexistente. Cierra el aviso para volver a una posición
+segura dentro del sistema. El motor permanece desbloqueado y no hay consumo
+ni inventario de combustible todavía.
+
+El juego no lee ni escribe archivos de partida. Cada ejecución comienza con
+Marte pendiente, motor y mapa bloqueados y sin ruta. Si existe un archivo antiguo
+`partidas/progreso.txt`, se ignora; no hace falta borrarlo para empezar de nuevo.
 
 ## Organización
 
@@ -87,6 +116,9 @@ Escape sigue cerrando el programa.
 - `src/bin/exportar.rs`: vistas sin ventana, incluidas nave, estación y planetas exteriores.
 - `src/minijuegos/puzzle/turing.rs`: reglas, validación, cinta y ejecución de la máquina.
 - `src/juego/estados/marte.rs`: llegada, descenso, terminal y salida de Marte.
+- `src/juego/estados/progreso.rs`: desbloqueos de la partida actual, solo en memoria.
+- `src/juego/navegacion/mapa.rs`: mapa y selección de ruta.
+- `src/juego/navegacion/salto.rs`: activación en el borde y solicitud para la futura escena.
 - `src/galaxias/sistema_solar/marte/`: paisaje procedural y presentación de la terminal.
 
 La integración reutiliza las funciones entregadas en `navecita`, el cargador OBJ

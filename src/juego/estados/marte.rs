@@ -8,18 +8,21 @@ pub struct MisionMarte {
     pub fase: FaseMarte,
     pub descenso: f32,
     armada: bool,
+    completada: bool,
 }
 
 impl Default for MisionMarte {
     fn default() -> Self {
-        Self { maquina: MaquinaTuring::default(), fase: FaseMarte::Espacio, descenso: 0.0, armada: true }
+        Self { maquina: MaquinaTuring::default(), fase: FaseMarte::Espacio, descenso: 0.0, armada: true, completada: false }
     }
 }
 
 impl MisionMarte {
+    pub fn completada(&self) -> bool { self.completada || self.maquina.aceptada() }
+    pub fn marcar_completada(&mut self) { self.completada = true; self.armada = false; }
     // Altura desde la superficie de Marte; jamás se usa la cámara libre para aterrizar.
     pub fn observar(&mut self, altura: f32, velocidad: f32, en_vuelo: bool) -> bool {
-        if self.fase != FaseMarte::Espacio || !en_vuelo { return false; }
+        if self.completada() || self.fase != FaseMarte::Espacio || !en_vuelo { return false; }
         if altura > 10.0 { self.armada = true; }
         if self.armada && altura <= 6.5 && altura >= 0.0 && velocidad <= 6.0 {
             self.armada = false;
@@ -102,9 +105,19 @@ mod tests {
         }
         m.despegar();
         m.observar(12.0, 0.0, true);
-        m.observar(altura, 0.0, true);
+        assert!(!m.observar(altura, 0.0, true));
         m.actualizar(5.1);
         assert!(m.maquina.aceptada());
         assert_eq!(m.maquina.pasos(), 4);
+    }
+
+    #[test]
+    fn marca_de_victoria_bloquea_otro_aterrizaje_en_la_misma_partida() {
+        let mut m = MisionMarte::default();
+        m.marcar_completada();
+        assert!(!m.observar(20.0, 0.0, true));
+        assert!(!m.observar(3.0, 0.0, true));
+        assert!(m.completada());
+        assert_eq!(m.fase, FaseMarte::Espacio);
     }
 }

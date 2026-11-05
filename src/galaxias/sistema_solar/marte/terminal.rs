@@ -97,13 +97,13 @@ impl TerminalMarte {
         let ejecutar = Rectangle::new(934.0, 656.0, 252.0, 44.0);
         let activa = mision.fase == FaseMarte::Terminal;
         let bloqueada = mision.maquina.animando() || mision.maquina.aceptada();
-        if (clic && contiene(salir, p)) || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
-            || window.is_key_pressed(KeyboardKey::KEY_X) { return true; }
-        if mision.fase == FaseMarte::Instrucciones &&
+        let salir_solicitado = (clic && contiene(salir, p)) || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
+            || window.is_key_pressed(KeyboardKey::KEY_X);
+        if !salir_solicitado && mision.fase == FaseMarte::Instrucciones &&
             ((clic && contiene(comenzar, p)) || window.is_key_pressed(KeyboardKey::KEY_ENTER)) {
             mision.comenzar();
         }
-        if activa && !bloqueada {
+        if activa && !bloqueada && !salir_solicitado {
             if window.is_key_pressed(KeyboardKey::KEY_TAB) || window.is_key_pressed(KeyboardKey::KEY_DOWN) {
                 self.foco = (self.foco + 1) % 4;
             }
@@ -157,7 +157,7 @@ impl TerminalMarte {
             l.texto("X para volver al vuelo", 64.0, 765.0, 15.0, TENUE);
             l.rect(Rectangle::new(64.0, 733.0, 1152.0, 4.0), Color::new(65, 77, 80, 255));
             l.rect(Rectangle::new(64.0, 733.0, 1152.0 * mision.descenso, 4.0), CIAN);
-            return false;
+            return salir_solicitado;
         }
         if mision.fase == FaseMarte::Instrucciones {
             let mut l = Lienzo { d: &mut d, s, ox, oy };
@@ -200,7 +200,7 @@ impl TerminalMarte {
                 84.0, 619.0, 17.0, TENUE);
             l.rect(comenzar, CIAN);
             l.texto("COMENZAR [ENTER]", comenzar.x + 54.0, comenzar.y + 14.0, 20.0, Color::new(5, 24, 29, 255));
-            return false;
+            return salir_solicitado;
         }
         let m = &mision.maquina;
         let acento = if m.aceptada() { VERDE } else if m.animando() {
@@ -218,7 +218,7 @@ impl TerminalMarte {
         l.rect(salir, Color::new(27, 40, 47, 255));
         l.borde(salir, if contiene(salir, p) { acento } else { TENUE });
         l.texto("SALIR [X / ESC]", salir.x + 15.0, salir.y + 10.0, 16.0, TEXTO);
-        l.texto(if m.aceptada() { "PROTOCOLO ACEPTADO / MOTOR INTERESTELAR ACTIVADO" }
+        l.texto(if m.aceptada() { "PROTOCOLO ACEPTADO / MOTOR Y MAPA DESBLOQUEADOS" }
             else { "Motor bloqueado. Completa el protocolo de computación." }, 74.0, 170.0, 19.0, acento);
         l.texto("01 / CINTA DE EJECUCIÓN", 510.0, 207.0, 16.0, TENUE);
         l.texto(&format!("ESTADO {}   /   LEE {}   /   PASO {}/4", estado_texto(m.estado()),
@@ -282,7 +282,7 @@ impl TerminalMarte {
             l.rect(r, Color::new(29, 44, 50, 255));
             l.rect(Rectangle::new(r.x, r.y, r.width * (carga - i as f32).clamp(0.0, 1.0), r.height), acento);
         }
-        let aviso = if m.aceptada() { "qf alcanzado. Motor listo. Puedes despegar." }
+        let aviso = if m.aceptada() { "qf alcanzado. Sal con X y abre el mapa con M." }
             else if m.error { "Transicion inválida. Revisa la regla y vuelve a intentar." }
             else if m.animando() { "Escribiendo simbolo y desplazando el cabezal..." }
             else { "Selecciona la regla y construye su acción" };
@@ -294,6 +294,6 @@ impl TerminalMarte {
             let y = 20.0 + (i as f32 * 19.0).rem_euclid(66.0);
             l.rect(Rectangle::new(x, y, 2.0, 1.0), Color::new(255, 211, 166, 90));
         }
-        false
+        salir_solicitado
     }
 }

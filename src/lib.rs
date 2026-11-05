@@ -41,3 +41,11 @@ pub mod paisaje_marte;
 #[cfg(feature = "ventana")]
 #[path = "galaxias/sistema_solar/marte/terminal.rs"]
 pub mod terminal_marte;
+
+#[path = "juego/estados/progreso.rs"]
+pub mod progreso;
+#[path = "juego/navegacion/salto.rs"]
+pub mod salto;
+#[cfg(feature = "ventana")]
+#[path = "juego/navegacion/mapa.rs"]
+pub mod mapa;
