@@ -31,3 +31,13 @@ pub mod textura;
 pub mod nave;
 #[path = "juego/navegacion/seguimiento.rs"]
 pub mod seguimiento;
+
+#[path = "minijuegos/puzzle/turing.rs"]
+pub mod turing;
+#[path = "juego/estados/marte.rs"]
+pub mod mision_marte;
+#[path = "galaxias/sistema_solar/marte/paisaje.rs"]
+pub mod paisaje_marte;
+#[cfg(feature = "ventana")]
+#[path = "galaxias/sistema_solar/marte/terminal.rs"]
+pub mod terminal_marte;

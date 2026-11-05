@@ -26,6 +26,10 @@ fn main() {
     let mut fb = Framebuffer::new(ANCHO, ALTO);
     let aj = Ajustes::default();
 
+    // Superficie del minijuego de Marte, con el mismo rasterizador en CPU.
+    let paisaje = nave_raster::paisaje_marte::dibujar_paisaje(ANCHO, ALTO);
+    guardar(&paisaje, &format!("{}/marte_superficie.ppm", carpeta));
+
     for (nombre, pos, objetivo) in escena.vistas() {
         let mut cam = Camara::nueva(ANCHO as f32, ALTO as f32);
         cam.pos = pos;
@@ -41,6 +45,10 @@ fn main() {
         Ok(n) => n,
         Err(e) => { eprintln!("No se pudo cargar la nave: {e}"); std::process::exit(1); }
     };
+    for (nombre, t) in [("marte_aproximacion", 0.25), ("marte_descenso", 0.65), ("marte_contacto", 1.0)] {
+        let cuadro = nave_raster::paisaje_marte::dibujar_aterrizaje(&paisaje, &nave, t);
+        guardar(&cuadro, &format!("{}/{}.ppm", carpeta, nombre));
+    }
     let cuerpos = escena.esferas();
     let ast = escena.colisionadores_asteroides().to_vec();
     let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: (CINTURON_INT, CINTURON_EXT) };

@@ -11,6 +11,8 @@ use nave_raster::{
     render::dibujar_con_nave as dibujar,
 };
 use nave_raster::seguimiento::Seguimiento;
+use nave_raster::mision_marte::{FaseMarte, MisionMarte};
+use nave_raster::terminal_marte::TerminalMarte;
 use raylib::prelude::*;
 
 fn resolucion(calidad: usize) -> (usize, usize) {
@@ -25,6 +27,8 @@ fn main() {
     }.unwrap_or_else(|error| { eprintln!("No se pudo cargar la nave: {error}"); std::process::exit(1) });
     let (mut window, thread) = raylib::init().size(1280, 800).title("Sistema solar - rasterizador por software").build();
     window.set_target_fps(60);
+    // Escape vuelve al vuelo desde la terminal; en vuelo cierra el programa.
+    window.set_exit_key(None);
     window.disable_cursor();
 
     println!("Generando texturas y sistema solar...");
@@ -43,10 +47,30 @@ fn main() {
     let mut tiempo = 0.0f32;
     let mut mouse = true;
     let mut camara_libre = false;
+    let mut mision_marte = MisionMarte::default();
+    let mut terminal_marte = TerminalMarte::default();
 
     while !window.window_should_close() {
         let dt = window.get_frame_time().clamp(0.0005, 0.1);
         tiempo += dt;
+
+        // La misión conserva su progreso entre visitas y consume su propia
+        // entrada: al seleccionar botones nunca se mueve ni daña la nave.
+        if mision_marte.fase != FaseMarte::Espacio {
+            mision_marte.actualizar(dt);
+            if terminal_marte.cuadro(&mut window, &thread, &mut mision_marte, &nave, tiempo, textura.as_ref()) {
+                mision_marte.despegar();
+                let marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte").expect("falta Marte");
+                let radial = (escena.pos_sol() - marte.pos).norm();
+                let pos = marte.pos + radial * (marte.radio + 12.0);
+                nave.teletransportar(pos, pos + radial);
+                nave.modo_local = false;
+                seguimiento.reiniciar(nave.fwd, nave.up);
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            }
+            continue;
+        }
+        if window.is_key_pressed(KeyboardKey::KEY_ESCAPE) { break; }
 
         // ----- Interruptores -----
         if window.is_key_pressed(KeyboardKey::KEY_F1) { calidad = 1; }
@@ -146,6 +170,13 @@ fn main() {
                 if orbitando { Some((raton.x, raton.y)) } else { None }, &cuerpos);
         }
 
+        let marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte").expect("falta Marte");
+        let altura_marte = (nave.pos - marte.pos).len() - marte.radio;
+        if mision_marte.observar(altura_marte, nave.velocidad(), !camara_libre && nave.destruida <= 0.0) {
+            nave.vel = V3::ZERO;
+            window.enable_cursor();
+        }
+
         let st = dibujar(&mut fb, &escena, &cielo, &cam, tiempo, &aj, Some(&nave));
 
         if textura.is_none() {
@@ -224,6 +255,14 @@ fn main() {
             else if alt < 25.0 { Some(format!("[F] modo local para rodear {cercano}")) } else { None };
         if let Some(t) = local_txt {
             d.draw_text(&t, 16, (sh as i32) - 60, 18, Color::new(120, 255, 240, 255));
+        }
+        if !camara_libre && altura_marte < 18.0 {
+            d.draw_text("MARTE: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
+                16, sh as i32 - 88, 17, Color::new(255, 190, 132, 255));
+        }
+        if mision_marte.maquina.aceptada() {
+            d.draw_text("MOTOR INTERESTELAR: PROTOCOLO ACTIVADO", sw as i32 - 440, sh as i32 - 30,
+                17, Color::new(131, 239, 163, 255));
         }
 
         // Integridad de la nave.

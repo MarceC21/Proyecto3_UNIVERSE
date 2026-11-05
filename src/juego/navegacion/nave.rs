@@ -33,6 +33,15 @@ const ESFERAS: [(V3, f32); 5] = [
 ];
 const RADIO_ENVOLVENTE: f32 = 32.0 * ESCALA_NAVE;
 
+// Pose visual independiente del estado de vuelo (cinemáticas y vistas previas).
+#[derive(Clone, Copy)]
+pub struct PoseNave {
+    pub pos: V3,
+    pub fwd: V3,
+    pub up: V3,
+    pub empuje: f32,
+}
+
 // Lo que la nave necesita saber del mundo.
 pub struct Mundo<'a> {
     pub cuerpos: &'a [(V3, f32)],
@@ -326,10 +335,16 @@ impl Nave {
     // ---------------- Dibujo ----------------
     pub fn emitir<'a>(&'a self, cam: &Camara, out: &mut Vec<Item<'a>>, st: &mut Stats) {
         if self.destruida > 0.0 { return; }
-        let rot = Rot::de_columnas(-self.derecha(), self.up, self.fwd);
+        self.emitir_pose(cam, PoseNave { pos: self.pos, fwd: self.fwd,
+            up: self.up, empuje: self.empuje_visual }, out, st);
+    }
+
+    pub fn emitir_pose<'a>(&'a self, cam: &Camara, pose: PoseNave,
+        out: &mut Vec<Item<'a>>, st: &mut Stats) {
+        let rot = Rot::de_columnas(-pose.fwd.cross(pose.up).norm(), pose.up, pose.fwd);
         let escala = v3(ESCALA_NAVE, ESCALA_NAVE, ESCALA_NAVE);
-        let origen = self.pos - rot.aplicar(self.pivote * ESCALA_NAVE);
-        let dist = (self.pos - cam.pos).len();
+        let origen = pose.pos - rot.aplicar(self.pivote * ESCALA_NAVE);
+        let dist = (pose.pos - cam.pos).len();
         for (mi, si, col) in &self.partes {
             st.objetos_total += 1;
             st.objetos_enviados += 1;
@@ -341,7 +356,7 @@ impl Nave {
         // Llamas de los tres motores (en el modelo: x = -5.5, 0, 5.5; y = 4.8; z = -29.2).
         let (f, r, u) = cam.base();
         let rot_b = Rot::de_columnas(r, u, -f);
-        let tam = 0.28 + 0.55 * self.empuje_visual.min(1.6);
+        let tam = 0.28 + 0.55 * pose.empuje.min(1.6);
         for x in [-5.5f32, 0.0, 5.5] {
             st.objetos_total += 1;
             st.objetos_enviados += 1;
@@ -350,7 +365,7 @@ impl Nave {
             let p = origen + rot.aplicar(v3(x, 4.8, -29.6) * ESCALA_NAVE);
             out.push(Item { malla: &self.m_llama, shader: &self.s_llama, pos: p, rot: rot_b,
                 escala: v3(tam, tam, tam), mezcla: Mezcla::Aditivo, doble_cara: true,
-                tinte: v3(0.3 + 0.7 * self.empuje_visual.min(1.0), 0.0, 0.0), mip: 0.0, dist: dist - 0.3 });
+                tinte: v3(0.3 + 0.7 * pose.empuje.min(1.0), 0.0, 0.0), mip: 0.0, dist: dist - 0.3 });
         }
     }
 }
