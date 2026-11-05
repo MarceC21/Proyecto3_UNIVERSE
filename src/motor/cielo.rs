@@ -18,6 +18,7 @@ pub struct Estrella {
 pub struct Cielo {
     pub nebulosa: Textura,
     pub estrellas: Vec<Estrella>,
+    pub polvo: Vec<V3>, // posiciones 0..1 dentro de una caja que sigue a la cámara
 }
 
 fn nivel(x: f32, n: f32) -> f32 {
@@ -61,6 +62,7 @@ impl Cielo {
                 vel: rng.rango(0.8, 3.0),
             });
         }
-        Cielo { nebulosa, estrellas }
+        let polvo = (0..320).map(|_| v3(rng.f(), rng.f(), rng.f())).collect();
+        Cielo { nebulosa, estrellas, polvo }
     }
 }

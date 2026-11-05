@@ -65,8 +65,8 @@ mod tests {
 impl Estacion {
     pub fn nueva(tierra: V3, sol: V3) -> Self {
         let modelo = Modelo::desde_textos(
-            include_str!("../assets/estacion/estacion.obj"),
-            include_str!("../assets/estacion/estacion.mtl"),
+            include_str!("../../../assets/galaxias/sistema_solar/estacion/estacion.obj"),
+            include_str!("../../../assets/galaxias/sistema_solar/estacion/estacion.mtl"),
         ).expect("el recurso de la estación debe ser un OBJ válido");
         let (centro, _) = modelo.centro_y_radio();
         let centro = v3(centro[0], centro[1], centro[2]);

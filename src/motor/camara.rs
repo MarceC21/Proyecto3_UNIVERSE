@@ -19,6 +19,8 @@ pub struct Camara {
     pub ancho: f32,
     pub alto: f32,
     pub velocidad_actual: f32,
+    // Si está presente, sustituye a la base calculada con yaw/pitch (cámara de persecución con alabeo).
+    pub base_ext: Option<(V3, V3, V3)>,
 }
 
 const SENSIBILIDAD: f32 = 0.0022;
@@ -26,7 +28,7 @@ const SENSIBILIDAD: f32 = 0.0022;
 impl Camara {
     pub fn nueva(ancho: f32, alto: f32) -> Camara {
         Camara { pos: v3(0.0, 60.0, 150.0), yaw: 0.0, pitch: -0.3, vel: V3::ZERO,
-                 fov: 62f32.to_radians(), ancho, alto, velocidad_actual: 0.0 }
+                 fov: 62f32.to_radians(), ancho, alto, velocidad_actual: 0.0, base_ext: None }
     }
 
     pub fn ajustar_resolucion(&mut self, ancho: f32, alto: f32) {
@@ -36,6 +38,7 @@ impl Camara {
 
     // (adelante, derecha, arriba)
     pub fn base(&self) -> (V3, V3, V3) {
+        if let Some(b) = self.base_ext { return b; }
         let f = v3(self.yaw.sin() * self.pitch.cos(), self.pitch.sin(), -self.yaw.cos() * self.pitch.cos());
         let r = v3(self.yaw.cos(), 0.0, self.yaw.sin());
         (f, r, r.cross(f).norm())
@@ -51,6 +54,7 @@ impl Camara {
     pub fn escala_px(&self) -> f32 { (self.alto * 0.5) / (self.fov * 0.5).tan() }
 
     pub fn mirar_a(&mut self, objetivo: V3) {
+        self.base_ext = None;
         let d = (objetivo - self.pos).norm();
         self.pitch = d.y.clamp(-1.0, 1.0).asin();
         self.yaw = d.x.atan2(-d.z);
@@ -137,3 +141,4 @@ impl Camara {
         radio_limite - (self.pos.x * self.pos.x + self.pos.z * self.pos.z).sqrt()
     }
 }
+

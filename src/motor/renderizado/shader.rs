@@ -238,3 +238,47 @@ impl Shader for ShaderBrillo {
         [col.x, col.y, col.z, (aureola * 0.85 + rayos) * f.tinte.x]
     }
 }
+
+// ---------- Casco de la nave: color del .mtl + luz toon + brillo especular ----------
+// `espec` = intensidad del destello; `emisivo` >= 1 => la pieza brilla por sí sola (toberas).
+pub struct ShaderNave {
+    pub espec: f32,
+    pub emisivo: f32,
+}
+
+impl Shader for ShaderNave {
+    fn shade(&self, f: &Fragmento, c: &Contexto) -> [f32; 4] {
+        if self.emisivo >= 1.0 {
+            let col = f.tinte * (1.0 + 0.12 * (c.tiempo * 6.0).sin());
+            return [col.x, col.y, col.z, 1.0];
+        }
+        let v = (c.cam - f.pos).norm();
+        let mut n = f.normal.norm();
+        // El modelo se dibuja a doble cara: la normal siempre se orienta hacia el ojo.
+        if n.dot(v) < 0.0 { n = -n; }
+        let l = (c.sol - f.pos).norm();
+        let luz = luz_toon(n.dot(l));
+        let mut col = f.tinte * 1.25 * tono_sombra(luz) * (luz * 1.1) + f.tinte * self.emisivo;
+        let h = (l + v).norm();
+        let s = n.dot(h).max(0.0).powf(48.0);
+        col += v3(1.0, 1.0, 1.0) * (smoothstep(0.55, 0.65, s) * self.espec);
+        let ndv = n.dot(v).max(0.0);
+        col += rgb(120.0, 190.0, 255.0) * ((1.0 - ndv).powi(3) * 0.18); // luz de borde fría
+        [col.x, col.y, col.z, 1.0]
+    }
+}
+
+// ---------- Llama del propulsor (sprite aditivo cian -> blanco) ----------
+pub struct ShaderLlama;
+
+impl Shader for ShaderLlama {
+    fn shade(&self, f: &Fragmento, c: &Contexto) -> [f32; 4] {
+        let (x, y) = (f.uv[0] - 0.5, f.uv[1] - 0.5);
+        let r = (x * x + y * y).sqrt() * 2.0;
+        if r >= 1.0 { return [0.0; 4]; }
+        let nucleo = (1.0 - r).powf(2.2);
+        let col = mezcla(rgb(40.0, 150.0, 255.0), rgb(235.0, 250.0, 255.0), nucleo * nucleo);
+        let parpadeo = 0.9 + 0.1 * (c.tiempo * 38.0 + f.centro.x * 7.0).sin();
+        [col.x, col.y, col.z, nucleo * f.tinte.x * parpadeo]
+    }
+}

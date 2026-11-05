@@ -1,13 +1,16 @@
-// Ventana (raylib) que muestra el sistema solar dibujado con NUESTRO rasterizador.
+// Ventana (raylib) con el sistema solar y la nave, dibujados con NUESTRO rasterizador.
 // raylib solo abre la ventana, lee teclado/ratón y muestra el framebuffer + HUD.
 use nave_raster::{
     camara::{Camara, Entrada},
     cielo::Cielo,
     dibujo::Ajustes,
-    escena::{Escena, ALTO_LIMITE, RADIO_LIMITE},
+    escena::{Escena, ALTO_LIMITE, CINTURON_EXT, CINTURON_INT, RADIO_LIMITE},
+    math::{v3, V3},
+    nave::{Control, Mundo, Nave},
     raster::Framebuffer,
-    render::dibujar,
+    render::dibujar_con_nave as dibujar,
 };
+use nave_raster::seguimiento::Seguimiento;
 use raylib::prelude::*;
 
 fn resolucion(calidad: usize) -> (usize, usize) {
@@ -15,11 +18,16 @@ fn resolucion(calidad: usize) -> (usize, usize) {
 }
 
 fn main() {
+    let ruta = std::env::args().nth(1);
+    let mut nave = match ruta.as_deref() {
+        Some(ruta) => Nave::cargar(ruta),
+        None => Nave::predeterminada(),
+    }.unwrap_or_else(|error| { eprintln!("No se pudo cargar la nave: {error}"); std::process::exit(1) });
     let (mut window, thread) = raylib::init().size(1280, 800).title("Sistema solar - rasterizador por software").build();
     window.set_target_fps(60);
     window.disable_cursor();
 
-    println!("Generando texturas...");
+    println!("Generando texturas y sistema solar...");
     let mut escena = Escena::nueva();
     let cielo = Cielo::nuevo();
 
@@ -27,17 +35,17 @@ fn main() {
     let (mut rw, mut rh) = resolucion(calidad);
     let mut fb = Framebuffer::new(rw, rh);
     let mut cam = Camara::nueva(rw as f32, rh as f32);
+    let mut seguimiento = Seguimiento::nuevo(nave.fwd, nave.up);
     let vistas = escena.vistas();
-    cam.pos = vistas[0].1;
-    cam.mirar_a(vistas[0].2);
 
     let mut textura: Option<Texture2D> = None;
     let mut aj = Ajustes::default();
     let mut tiempo = 0.0f32;
     let mut mouse = true;
+    let mut camara_libre = false;
 
     while !window.window_should_close() {
-        let dt = window.get_frame_time().min(0.1);
+        let dt = window.get_frame_time().clamp(0.0005, 0.1);
         tiempo += dt;
 
         // ----- Interruptores -----
@@ -48,20 +56,39 @@ fn main() {
         if window.is_key_pressed(KeyboardKey::KEY_L) { aj.lod = !aj.lod; }
         if window.is_key_pressed(KeyboardKey::KEY_O) { aj.orbitas = !aj.orbitas; }
         if window.is_key_pressed(KeyboardKey::KEY_B) { aj.limite = !aj.limite; }
+        if window.is_key_pressed(KeyboardKey::KEY_F) { nave.modo_local = !nave.modo_local; }
+        if window.is_key_pressed(KeyboardKey::KEY_R) { nave.reaparecer(); seguimiento.reiniciar(nave.fwd, nave.up); }
         if window.is_key_pressed(KeyboardKey::KEY_TAB) {
             mouse = !mouse;
             if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
         }
-        // Se conservan 6=cinturón y 7=límite para los controles existentes.
+        if window.is_key_pressed(KeyboardKey::KEY_V) {
+            camara_libre = !camara_libre;
+            cam.vel = V3::ZERO;
+            if camara_libre {
+                // La cámara libre arranca donde estaba la de persecución.
+                let (f, _, _) = cam.base();
+                cam.pitch = f.y.clamp(-1.0, 1.0).asin();
+                cam.yaw = f.x.atan2(-f.z);
+                cam.base_ext = None;
+                cam.fov = 62f32.to_radians();
+            }
+        }
+        // Se conservan todos los destinos del sistema actual. T visita la estación; E es alabeo.
         let teclas = [KeyboardKey::KEY_ZERO, KeyboardKey::KEY_ONE, KeyboardKey::KEY_TWO, KeyboardKey::KEY_THREE,
                       KeyboardKey::KEY_FOUR, KeyboardKey::KEY_FIVE, KeyboardKey::KEY_EIGHT, KeyboardKey::KEY_NINE,
                       KeyboardKey::KEY_U, KeyboardKey::KEY_N, KeyboardKey::KEY_SIX, KeyboardKey::KEY_SEVEN,
-                      KeyboardKey::KEY_E];
+                      KeyboardKey::KEY_T];
         for (i, k) in teclas.iter().enumerate() {
             if window.is_key_pressed(*k) && i < vistas.len() {
-                cam.pos = vistas[i].1;
-                cam.vel = nave_raster::math::V3::ZERO;
-                cam.mirar_a(vistas[i].2);
+                if camara_libre {
+                    cam.pos = vistas[i].1;
+                    cam.vel = V3::ZERO;
+                    cam.mirar_a(vistas[i].2);
+                } else {
+                    nave.teletransportar(vistas[i].1, vistas[i].2);
+                    seguimiento.reiniciar(nave.fwd, nave.up);
+                }
             }
         }
 
@@ -78,23 +105,48 @@ fn main() {
         let eje = |mas: KeyboardKey, menos: KeyboardKey, w: &RaylibHandle| {
             (w.is_key_down(mas) as i32 - w.is_key_down(menos) as i32) as f32
         };
-        let mut giro = Vector2::zero();
-        if mouse { giro = window.get_mouse_delta(); }
-        giro.x += 420.0 * dt * eje(KeyboardKey::KEY_RIGHT, KeyboardKey::KEY_LEFT, &window);
-        giro.y += 420.0 * dt * eje(KeyboardKey::KEY_UP, KeyboardKey::KEY_DOWN, &window);
-        let entrada = Entrada {
-            adelante: eje(KeyboardKey::KEY_W, KeyboardKey::KEY_S, &window),
-            lateral: eje(KeyboardKey::KEY_D, KeyboardKey::KEY_A, &window),
-            vertical: eje(KeyboardKey::KEY_SPACE, KeyboardKey::KEY_LEFT_CONTROL, &window),
-            giro_x: giro.x,
-            giro_y: giro.y,
-            turbo: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
-        };
+        let raton = if mouse { window.get_mouse_delta() } else { Vector2::zero() };
+        let orbitando = !camara_libre && window.is_mouse_button_down(MouseButton::MOUSE_BUTTON_RIGHT);
 
-        // ----- Actualizar y dibujar -----
         escena.actualizar(dt);
-        cam.actualizar(&entrada, dt, &escena.esferas(), RADIO_LIMITE, ALTO_LIMITE);
-        let st = dibujar(&mut fb, &escena, &cielo, &cam, tiempo, &aj);
+        let cuerpos = escena.esferas();
+        if camara_libre {
+            let mut giro = raton;
+            giro.x += 420.0 * dt * eje(KeyboardKey::KEY_RIGHT, KeyboardKey::KEY_LEFT, &window);
+            giro.y += 420.0 * dt * eje(KeyboardKey::KEY_UP, KeyboardKey::KEY_DOWN, &window);
+            let entrada = Entrada {
+                adelante: eje(KeyboardKey::KEY_W, KeyboardKey::KEY_S, &window),
+                lateral: eje(KeyboardKey::KEY_D, KeyboardKey::KEY_A, &window),
+                vertical: eje(KeyboardKey::KEY_SPACE, KeyboardKey::KEY_LEFT_CONTROL, &window),
+                giro_x: giro.x,
+                giro_y: giro.y,
+                turbo: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
+            };
+            cam.actualizar(&entrada, dt, &cuerpos, RADIO_LIMITE, ALTO_LIMITE);
+        } else {
+            let control = Control {
+                empuje: eje(KeyboardKey::KEY_W, KeyboardKey::KEY_S, &window),
+                lateral: eje(KeyboardKey::KEY_D, KeyboardKey::KEY_A, &window),
+                vertical: eje(KeyboardKey::KEY_SPACE, KeyboardKey::KEY_LEFT_CONTROL, &window),
+                cabeceo: eje(KeyboardKey::KEY_UP, KeyboardKey::KEY_DOWN, &window),
+                guinada: eje(KeyboardKey::KEY_RIGHT, KeyboardKey::KEY_LEFT, &window),
+                alabeo: eje(KeyboardKey::KEY_E, KeyboardKey::KEY_Q, &window),
+                raton: if orbitando { (0.0, 0.0) } else { (raton.x, raton.y) },
+                turbo: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
+            };
+            let mundo = Mundo {
+                cuerpos: &cuerpos,
+                asteroides: escena.colisionadores_asteroides(),
+                radio_limite: RADIO_LIMITE,
+                alto_limite: ALTO_LIMITE,
+                cinturon: (CINTURON_INT, CINTURON_EXT),
+            };
+            nave.actualizar(&control, dt, &mundo);
+            seguimiento.actualizar(&mut cam, nave.pos, nave.fwd, nave.up, nave.velocidad(), dt,
+                if orbitando { Some((raton.x, raton.y)) } else { None }, &cuerpos);
+        }
+
+        let st = dibujar(&mut fb, &escena, &cielo, &cam, tiempo, &aj, Some(&nave));
 
         if textura.is_none() {
             let img = Image::gen_image_color(rw as i32, rh as i32, Color::BLACK);
@@ -109,9 +161,11 @@ fn main() {
         let escala = (sw / rw as f32).min(sh / rh as f32);
         let (dw, dh) = (rw as f32 * escala, rh as f32 * escala);
         let (ox, oy) = ((sw - dw) * 0.5, (sh - dh) * 0.5);
-        let (cercano, alt) = escena.cuerpo_cercano(cam.pos);
-        let dist_lim = cam.distancia_limite(RADIO_LIMITE);
+        let referencia = if camara_libre { cam.pos } else { nave.pos };
+        let (cercano, alt) = escena.cuerpo_cercano(referencia);
+        let dist_lim = RADIO_LIMITE - (referencia.x * referencia.x + referencia.z * referencia.z).sqrt();
         let fps = window.get_fps();
+        let punto_mira = cam.proyectar(nave.pos + nave.fwd * 40.0);
 
         let mut d = window.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
@@ -120,39 +174,74 @@ fn main() {
 
         // Etiquetas de los cuerpos proyectadas a pantalla.
         for c in &escena.cuerpos {
-            if let Some((sx, sy, w)) = cam.proyectar(c.pos + nave_raster::math::v3(0.0, c.radio * 1.5, 0.0)) {
+            if let Some((sx, sy, w)) = cam.proyectar(c.pos + v3(0.0, c.radio * 1.5, 0.0)) {
                 if w < 400.0 {
                     let (x, y) = ((ox + sx * escala) as i32, (oy + sy * escala) as i32);
-                    let t = format!("{} ({:.0})", c.nombre, w);
+                    let t = format!("{} ({:.0})", c.nombre, (c.pos - referencia).len());
                     d.draw_text(&t, x - (t.len() as i32) * 3, y - 14, 16, Color::new(255, 255, 255, 230));
                 }
             }
         }
-
         let estacion = &escena.estacion;
-        if let Some((sx, sy, profundidad)) = cam.proyectar(estacion.pos + nave_raster::math::v3(0.0, estacion.radio, 0.0)) {
+        if let Some((sx, sy, profundidad)) = cam.proyectar(estacion.pos + v3(0.0, estacion.radio, 0.0)) {
             if profundidad < 160.0 {
-                let distancia = (cam.pos - estacion.pos).len();
-                let texto = format!("Estacion ({:.0})", distancia);
+                let texto = format!("Estacion ({:.0})", (referencia - estacion.pos).len());
                 d.draw_text(&texto, (ox + sx * escala) as i32 - 50,
                     (oy + sy * escala) as i32 - 14, 16, Color::new(100, 240, 245, 230));
             }
         }
+        // Mira: hacia dónde apunta la nariz.
+        if let Some((sx, sy, _)) = punto_mira {
+            let (x, y) = ((ox + sx * escala) as i32, (oy + sy * escala) as i32);
+            let c = Color::new(120, 255, 240, 200);
+            d.draw_rectangle(x - 10, y - 1, 7, 2, c);
+            d.draw_rectangle(x + 4, y - 1, 7, 2, c);
+            d.draw_rectangle(x - 1, y - 10, 2, 7, c);
+            d.draw_rectangle(x - 1, y + 4, 2, 7, c);
+        }
 
-        d.draw_rectangle(8, 8, 670, 146, Color::new(0, 0, 0, 170));
-        d.draw_text(&format!("{} FPS | velocidad {:.1} | cerca de {} ({:.1})", fps, cam.velocidad_actual, cercano, alt), 16, 14, 16, Color::WHITE);
-        d.draw_text(&format!("Objetos {}/{}   Triangulos {} de {} (sin culling/LOD)", st.objetos_enviados, st.objetos_total, st.tris_enviados, st.tris_sin_optimizar), 16, 36, 16, Color::WHITE);
-        d.draw_text(&format!("Rasterizados {}   [C]ulling {}  [L]OD {}  [O]rbitas {}  [B]limite {}",
-            st.tris_raster, if aj.culling { "ON" } else { "off" }, if aj.lod { "ON" } else { "off" },
-            if aj.orbitas { "ON" } else { "off" }, if aj.limite { "ON" } else { "off" }), 16, 58, 16, Color::WHITE);
-        d.draw_text("WASD mover  Espacio/Ctrl subir/bajar  Shift turbo  Raton/flechas mirar  TAB cursor", 16, 84, 14, Color::LIGHTGRAY);
-        d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 104, 14, Color::LIGHTGRAY);
-        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  E Estacion  F1-F3 calidad", 16, 124, 14, Color::LIGHTGRAY);
+        d.draw_rectangle(8, 8, 760, 172, Color::new(0, 0, 0, 170));
+        d.draw_text(&format!("{} FPS | velocidad {:.1} / {:.0} | cerca de {} ({:.1})",
+            fps, nave.velocidad(), nave.velocidad_max, cercano, alt), 16, 14, 16, Color::WHITE);
+        d.draw_text(&format!("Objetos {}/{}   Triangulos {} de {} (sin culling/LOD)",
+            st.objetos_enviados, st.objetos_total, st.tris_enviados, st.tris_sin_optimizar), 16, 36, 16, Color::WHITE);
+        d.draw_text(&format!("[C]ulling {}  [L]OD {}  [O]rbitas {}  [B]limite {}  {}",
+            if aj.culling { "ON" } else { "off" }, if aj.lod { "ON" } else { "off" },
+            if aj.orbitas { "ON" } else { "off" }, if aj.limite { "ON" } else { "off" },
+            if camara_libre { "[V] CAMARA LIBRE" } else { "[V] camara libre" }), 16, 58, 16, Color::WHITE);
+        d.draw_text("WASD mover  Espacio/Ctrl subir/bajar  Q/E alabeo  Raton/flechas girar  Shift turbo", 16, 84, 14, Color::LIGHTGRAY);
+        d.draw_text("Clic derecho orbitar camara  F modo local  R reaparecer  V camara libre  TAB cursor", 16, 104, 14, Color::LIGHTGRAY);
 
+        d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 124, 14, Color::LIGHTGRAY);
+        d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+
+        // Modo local (rodear un cuerpo).
+        let objetivo_local = escena.cuerpos.iter().min_by(|a, b|
+            (a.pos - nave.objetivo).len().total_cmp(&(b.pos - nave.objetivo).len()))
+            .map(|c| c.nombre).unwrap_or(cercano);
+        let local_txt = if camara_libre { None } else if nave.local_activo { Some(format!("MODO LOCAL: orbitando {objetivo_local}  (A/D/Espacio rodean, W/S acercan)")) }
+            else if nave.modo_local { Some("MODO LOCAL activado: acércate a un cuerpo".to_string()) }
+            else if alt < 25.0 { Some(format!("[F] modo local para rodear {cercano}")) } else { None };
+        if let Some(t) = local_txt {
+            d.draw_text(&t, 16, (sh as i32) - 60, 18, Color::new(120, 255, 240, 255));
+        }
+
+        // Integridad de la nave.
+        let barra = (nave.integridad / 100.0).clamp(0.0, 1.0);
+        d.draw_rectangle(16, sh as i32 - 34, 204, 18, Color::new(0, 0, 0, 170));
+        let col = if barra > 0.5 { Color::new(90, 230, 140, 230) } else if barra > 0.25 { Color::new(250, 200, 70, 230) } else { Color::new(255, 70, 70, 230) };
+        d.draw_rectangle(18, sh as i32 - 32, (200.0 * barra) as i32, 14, col);
+        d.draw_text("INTEGRIDAD", 24, sh as i32 - 32, 12, Color::BLACK);
+
+        if nave.golpe > 0.0 {
+            d.draw_rectangle(0, 0, sw as i32, sh as i32, Color::new(255, 40, 40, (nave.golpe * 160.0) as u8));
+        }
+        if nave.destruida > 0.0 {
+            d.draw_text("NAVE DESTRUIDA", (sw as i32 - 300) / 2, sh as i32 / 2 - 20, 40, Color::new(255, 80, 80, 255));
+        }
         if dist_lim < 25.0 {
             let parpadeo = ((tiempo * 6.0).sin() * 0.5 + 0.5) * 120.0 + 135.0;
-            let msg = "LIMITE DEL SISTEMA SOLAR";
-            d.draw_text(msg, (sw as i32 - 360) / 2, 150, 28, Color::new(255, 90, 200, parpadeo as u8));
+            d.draw_text("LIMITE DEL SISTEMA SOLAR", (sw as i32 - 360) / 2, 192, 28, Color::new(255, 90, 200, parpadeo as u8));
         }
     }
 }

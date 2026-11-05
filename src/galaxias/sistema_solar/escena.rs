@@ -49,6 +49,7 @@ pub struct Escena {
     pub cuerpos: Vec<Cuerpo>,
     pub estacion: Estacion,
     asteroides: Vec<Asteroide>,
+    cols_ast: Vec<(V3, f32)>,
     m_cuadrado: usize,
     m_octaedro: usize,
     m_muro: usize,
@@ -164,10 +165,15 @@ impl Escena {
             });
         }
 
+        let cols_ast = asteroides.iter().map(|a| {
+            let primero = 3 + a.tipo * 3;
+            let radio = mallas[primero..primero + 3].iter().map(|m| m.radio).fold(0.0, f32::max);
+            (a.pos, a.escala * radio)
+        }).collect();
         let tierra = cuerpos.iter().find(|c| c.nombre == "Tierra").expect("falta Tierra");
         let estacion = Estacion::nueva(tierra.pos, cuerpos[0].pos);
         Escena {
-            mallas, shaders, cuerpos, estacion, asteroides, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
+            mallas, shaders, cuerpos, estacion, asteroides, cols_ast, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon, s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo,
         }
     }
@@ -181,6 +187,8 @@ impl Escena {
             c.angulo_nubes = (c.angulo_nubes + c.vel_rot * 1.25 * dt) % std::f32::consts::TAU;
         }
     }
+
+    pub fn colisionadores_asteroides(&self) -> &[(V3, f32)] { &self.cols_ast }
 
     pub fn esferas(&self) -> Vec<(V3, f32)> { self.cuerpos.iter().map(|c| (c.pos, c.radio)).collect() }
 

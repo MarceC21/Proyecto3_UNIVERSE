@@ -4,6 +4,7 @@ use crate::cielo::Cielo;
 use crate::dibujo::*;
 use crate::escena::Escena;
 use crate::math::*;
+use crate::nave::Nave;
 use crate::raster::*;
 use crate::shader::Contexto;
 use crate::textura::nucleos;
@@ -11,6 +12,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 pub fn dibujar(fb: &mut Framebuffer, escena: &Escena, cielo: &Cielo, cam: &Camara, tiempo: f32, aj: &Ajustes) -> Stats {
+    dibujar_con_nave(fb, escena, cielo, cam, tiempo, aj, None)
+}
+
+pub fn dibujar_con_nave(fb: &mut Framebuffer, escena: &Escena, cielo: &Cielo, cam: &Camara, tiempo: f32, aj: &Ajustes, nave: Option<&Nave>) -> Stats {
     let (w, h) = (fb.width, fb.height);
     let vista = Vista::de(cam, w, h);
     let ctx = Contexto { cam: cam.pos, tiempo, sol: escena.pos_sol() };
@@ -20,6 +25,7 @@ pub fn dibujar(fb: &mut Framebuffer, escena: &Escena, cielo: &Cielo, cam: &Camar
     let mut stats = Stats::default();
     let mut items: Vec<Item> = Vec::new();
     escena.emitir(cam, aj, &mut items, &mut stats);
+    if let Some(n) = nave { n.emitir(cam, &mut items, &mut stats); }
     let (mut opacos, mut transp): (Vec<Item>, Vec<Item>) = items.into_iter().partition(|i| i.mezcla == Mezcla::Opaco);
     transp.sort_by(|a, b| b.dist.total_cmp(&a.dist));
     opacos.extend(transp);
@@ -55,6 +61,7 @@ pub fn dibujar(fb: &mut Framebuffer, escena: &Escena, cielo: &Cielo, cam: &Camar
 
     // 3. Estrellas (puntos 3D proyectados; las grandes con destello en cruz).
     dibujar_estrellas(fb, cielo, &vista, tiempo);
+    if let Some(n) = nave { dibujar_polvo(fb, cielo, &vista, cam.pos, n.vel); }
 
     // 4. Triángulos: etapa de vértices en paralelo (cola de trabajo por objeto).
     let siguiente = AtomicUsize::new(0);
@@ -130,6 +137,42 @@ fn dibujar_estrellas(fb: &mut Framebuffer, cielo: &Cielo, v: &Vista, t: f32) {
                     }
                 }
             }
+        }
+    }
+}
+
+// Polvo espacial: motas fijas en el mundo dentro de una caja que sigue a la cámara.
+// Al volar se estiran en rayas: da la sensación de velocidad en el vacío.
+fn dibujar_polvo(fb: &mut Framebuffer, cielo: &Cielo, v: &Vista, cam: V3, vel: V3) {
+    const CAJA: f32 = 50.0;
+    let rapidez = vel.len();
+    if rapidez < 1.5 { return; }
+    let (w, h) = (fb.width as f32, fb.height as f32);
+    let proy = |p: V3| -> Option<(f32, f32)> {
+        let d = p - v.eye;
+        let wv = d.dot(v.f);
+        if wv < 0.3 { return None; }
+        Some(((d.dot(v.r) * v.fx / wv * 0.5 + 0.5) * w, (0.5 - d.dot(v.u) * v.fy / wv * 0.5) * h))
+    };
+    let estela = vel * 0.05;
+    for m in &cielo.polvo {
+        // Posición envuelta: siempre hay motas alrededor de la cámara.
+        let q = v3(
+            (m.x * CAJA - cam.x).rem_euclid(CAJA) - CAJA * 0.5 + cam.x,
+            (m.y * CAJA - cam.y).rem_euclid(CAJA) - CAJA * 0.5 + cam.y,
+            (m.z * CAJA - cam.z).rem_euclid(CAJA) - CAJA * 0.5 + cam.z,
+        );
+        let brillo = (1.0 - (q - cam).len() / (CAJA * 0.5)).clamp(0.0, 1.0) * (rapidez / 20.0).min(1.0) * 0.8;
+        if brillo < 0.03 { continue; }
+        let (Some(a), Some(b)) = (proy(q), proy(q - estela)) else { continue };
+        let pasos = ((b.0 - a.0).abs().max((b.1 - a.1).abs()).ceil().min(60.0)) as i32 + 1;
+        for i in 0..pasos {
+            let t = i as f32 / pasos as f32;
+            let (x, y) = ((a.0 + (b.0 - a.0) * t) as i32, (a.1 + (b.1 - a.1) * t) as i32);
+            if x < 0 || y < 0 || x >= w as i32 || y >= h as i32 { continue; }
+            let o = (y as usize * fb.width + x as usize) * 4;
+            let k = brillo * (1.0 - t) * 170.0;
+            for c in 0..3 { fb.pixels[o + c] = (fb.pixels[o + c] as f32 + k).min(255.0) as u8; }
         }
     }
 }

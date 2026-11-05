@@ -88,3 +88,9 @@ impl Rot {
         Rot { c: [self.aplicar(o.c[0]), self.aplicar(o.c[1]), self.aplicar(o.c[2])] }
     }
 }
+
+// Gira el vector `v` un ángulo `a` alrededor del eje unitario `eje` (fórmula de Rodrigues).
+pub fn girar(v: V3, eje: V3, a: f32) -> V3 {
+    let (s, c) = a.sin_cos();
+    v * c + eje.cross(v) * s + eje * (eje.dot(v) * (1.0 - c))
+}

@@ -22,7 +22,7 @@ required-features = ["ventana"]
 
 [[bin]]
 name = "exportar"
-path = "src/exportar.rs"
+path = "src/bin/exportar.rs"
 
 [profile.release]
 opt-level = 3
