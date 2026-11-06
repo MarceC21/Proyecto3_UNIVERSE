@@ -51,7 +51,7 @@ fn main() {
     }
     let cuerpos = escena.esferas();
     let ast = escena.colisionadores_asteroides().to_vec();
-    let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: Some((CINTURON_INT, CINTURON_EXT)) };
+    let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, gravedad: None, cinturon: Some((CINTURON_INT, CINTURON_EXT)) };
     let tierra = escena.cuerpos.iter().find(|c| c.nombre == "Tierra").unwrap();
     let escenarios: Vec<(&str, V3, V3, f32)> = vec![
         ("nave_inicio", nave_raster::nave::INICIO, nave_raster::nave::INICIO + v3(0.0, -0.05, -1.0), 0.0),

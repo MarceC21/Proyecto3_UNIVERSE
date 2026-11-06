@@ -118,9 +118,8 @@ Ese acceso inicia una sesión de inspección con el motor ya habilitado. El inic
 normal con `cargo run --release` conserva la misión de Marte y el mapa bloqueado.
 También se puede combinar `--galaxia solar|gargantua` con una ruta OBJ de nave.
 
-Gargantua tiene un **sol gigante provisional** en el centro. El agujero negro,
-la gravedad especial y la misión de Miller se implementarán después. Sus seis
-planetas son Miller (océano, el más cercano), Mann (hielo agrietado), Edmunds
+Gargantua tiene un **agujero negro** central con horizonte oscuro, disco de
+acreción animado y un arco luminoso, todo rasterizado en CPU. Sus seis planetas son Miller (océano, el más cercano), Mann (hielo agrietado), Edmunds
 (roca), Thalos (bandas y dos anillos separados), Nyx (fisuras) y Aurora (mares
 y continentes). Las posiciones orbitales permanecen fijas y rotan con `dt`.
 
@@ -151,13 +150,103 @@ permanecen iguales. Para generar vistas y medir los tiempos sin ventana:
 cargo run --release --no-default-features --bin exportar_gargantua -- /tmp/gargantua
 ```
 
+## Agujero negro y atracción
+
+El horizonte tiene **radio 26** (el sol provisional tenía 18), y el disco luminoso
+alcanza **radio 68** sin invadir Miller, cuya órbita está a 92 unidades del centro.
+Los demás planetas también se han separado hacia fuera. Se conservan las esferas LOD del motor;
+el disco y el arco añaden 514 triángulos. La iluminación de los planetas toma
+el centro del disco como fuente aproximada.
+
+La nave siente una atracción radial dentro de **150 unidades** del centro. La
+fuerza crece al acercarse y está limitada a 22 unidades de aceleración para
+mantener estable la integración. La física es propia: no se usan motores ni
+funciones de física de raylib. Los controles siguen funcionando; orienta la
+nave hacia fuera y mantén **W + Shift** para compensar la caída. Si activaste el
+modo local hacia el agujero, **F** libera la orientación para poder girar.
+El modo local no fija la distancia al agujero ni cancela su gravedad.
+
+Al cruzar el horizonte, la nave se pierde y reaparece tras 2.5 segundos en el
+punto seguro de Gargantua, conservando el progreso de la partida. La cámara
+libre no recibe gravedad. El sistema solar mantiene su vuelo anterior.
+
+Es una aproximación de juego, con disco y arco artísticos; no se integra la
+relatividad ni la trayectoria de la luz. La gravedad de superficie propia de
+Miller queda para después; su misión se describe a continuación.
+
+Para verlo, inicia `cargo run --release -- --galaxia gargantua` y pulsa **1**.
+El exportador incluye `agujero_cerca.ppm` y `agujero_lateral.ppm` para inspeccionar
+el encuadre sin ventana.
+
+## Misión de Miller
+
+En Gargantua, acércate a Miller a menos de 6.5 unidades de altura y baja la
+velocidad a 6 o menos para aterrizar. La cámara libre no activa la misión.
+La nave realiza una aproximación y un descenso de cinco segundos. Después se
+presentan las instrucciones en azul: pulsa **Comenzar / Enter** para iniciar
+el reloj y el avance de la ola. La nave de superficie tiene escala **×5**;
+su tamaño durante el vuelo espacial se conserva.
+Para probar directamente la misión dentro del mismo juego:
+
+```bash
+cargo run --release -- --miller
+```
+
+- **WASD**: caminar sobre el agua; **ratón / flechas**: mirar; **Tab**: cursor.
+- **E**: inspeccionar una caja a menos de 3.5 unidades. Hay tres; el módulo
+  cambia aleatoriamente al comenzar cada intento. Las revisadas quedan verdes.
+- **Clic o 1–3**: responder las cuatro preguntas y seleccionar una estrategia.
+  Una respuesta incorrecta permite volver a intentar; el reloj sigue avanzando.
+  El cuestionario usa un panel morado. Al terminar, aparece una pantalla naranja
+  que confirma la recuperación de datos y permite elegir entre las tres formas
+  de regresar a la nave.
+- **TARS**: transporte asistido hacia la nave, evitando las cajas. No requiere
+  todavía un modelo de TARS. **Correr** y **equipo adicional** mantienen WASD;
+  la velocidad depende de la distancia a la nave y de la estrategia elegida.
+- **X / Esc**: abandonar y volver al vuelo. En la pantalla final, **R** inicia
+  un intento limpio con reloj, cajas, cuestionario, controles y ola restaurados.
+
+El cronómetro usa `Instant` y mide tiempo real, incluso durante las preguntas.
+La ola se acerca desde el inicio; perder depende de su alcance espacial. Los
+valores internos de diseño son 90 s para un regreso exitoso y 110 s para que
+el frente alcance la zona de la nave. Se ajustan en `Configuracion::default()`
+de `src/juego/estados/miller.rs`; no se muestran como cuenta regresiva.
+Las estrategias usan referencias de 8, 18 y 35 s para calcular velocidades,
+sin sumar esos segundos al reloj ni mostrarlos al jugador.
+
+Solo al finalizar se revela el tiempo exterior: **1 hora en Miller = 7 años**,
+equivalente a `segundos_locales * 7 * 365 / 3600` días. Hay finales de éxito,
+regreso tardío y derrota por la ola. Solo el éxito completa Gargantua y revela
+Tau Ceti en el mapa; ese sistema todavía no permite viajar. La misión exitosa
+no se reabre al acercarse a Miller durante la misma partida. Todo el progreso
+se reinicia al cerrar el juego, como en Marte.
+
+Se conserva el agua procedural, la pared de agua y las cajas de la escena
+entregada. El jugador reutiliza `Camara`, su suavizado y sus colisiones, con
+altura fija y subpasos; la nave de superficie es el OBJ compartido. No se
+añade otro bucle de juego ni renderizado 3D de raylib.
+
+```bash
+cargo run --release --no-default-features --bin exportar_miller -- /tmp/miller
+cargo run --release --bin ver_miller
+```
+
+El exportador muestra el avance de la ola a 0, 60 y 100 s sin ventana.
+También guarda `miller_aproximacion.ppm`, `miller_descenso.ppm` y
+`miller_contacto.ppm` para revisar la animación de llegada.
+`ver_miller` conserva la vista previa visual entregada (flechas para mirar),
+mientras `--miller` abre el minijuego interactivo integrado.
+
 ## Organización
 
 - `src/motor/`: cámara genérica, cielo, matemáticas, geometría, texturas y renderizado.
 - `src/juego/navegacion/nave.rs`: carga del modelo, vuelo, modo local, colisiones y emisión de mallas.
 - `src/juego/navegacion/seguimiento.rs`: cámara de seguimiento de la nave.
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
-- `src/galaxias/gargantua/`: configuración del segundo sistema y sus seis texturas.
+- `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
+- `src/galaxias/gargantua/miller/`: paisaje y controlador de la misión de superficie.
+- `src/juego/estados/miller.rs`: cajas, preguntas, estrategias, ola, reloj y resultados.
+- `src/motor/fisica/gravedad.rs`: campo de atracción independiente de raylib.
 - `src/motor/cielo.rs`: generador de skybox para cada sistema.
 - `assets/compartidos/nave/`: OBJ y MTL copiados del proyecto previo `Lab4/nave_raster`.
 - `assets/galaxias/sistema_solar/estacion/`: modelo, materiales y generador de la estación.

@@ -24,6 +24,11 @@ required-features = ["ventana"]
 name = "exportar"
 path = "src/bin/exportar.rs"
 
+[[bin]]
+name = "ver_miller"
+path = "src/bin/ver_miller.rs"
+required-features = ["ventana"]
+
 [profile.release]
 opt-level = 3
 

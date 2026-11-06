@@ -54,3 +54,16 @@ pub mod mapa;
 pub mod generadores_gargantua;
 #[path = "galaxias/gargantua/escena.rs"]
 pub mod gargantua;
+
+#[path = "motor/fisica/gravedad.rs"]
+pub mod gravedad;
+#[path = "galaxias/gargantua/agujero_negro.rs"]
+pub mod agujero_negro;
+
+#[path = "galaxias/gargantua/miller/paisaje.rs"]
+pub mod paisaje_miller;
+#[path = "juego/estados/miller.rs"]
+pub mod mision_miller;
+#[cfg(feature = "ventana")]
+#[path = "galaxias/gargantua/miller/interfaz.rs"]
+pub mod interfaz_miller;

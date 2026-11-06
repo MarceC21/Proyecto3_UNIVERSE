@@ -1,5 +1,6 @@
 // Configuración de Gargantua; mallas, shaders, LOD y emisor compartidos con Solar.
 use crate::escena::{Cuerpo, Escena};
+use crate::agujero_negro::{AgujeroNegro, ShaderHorizonte, RADIO_HORIZONTE};
 use crate::generadores;
 use crate::generadores_gargantua as gen;
 use crate::malla;
@@ -18,7 +19,7 @@ impl Escena {
         let m_octaedro = mallas.len(); mallas.push(malla::octaedro());
         let m_muro = mallas.len(); mallas.push(malla::muro(RADIO_LIMITE, -ALTO_LIMITE, ALTO_LIMITE, 192));
         let m_anillo_limite = mallas.len(); mallas.push(malla::anillo(RADIO_LIMITE - 1.0, RADIO_LIMITE + 1.0, 384, 150.0));
-        let mut shaders: Vec<Box<dyn Shader>> = vec![Box::new(ShaderSol { tex: generadores::sol() })];
+        let mut shaders: Vec<Box<dyn Shader>> = vec![Box::new(ShaderHorizonte)];
         for (tex, atmosfera) in [
             (gen::miller(), rgb(130.0, 219.0, 232.0)),
             (gen::mann(), rgb(178.0, 219.0, 238.0)),
@@ -35,13 +36,13 @@ impl Escena {
         let mut cuerpos = Vec::new();
         // Radios un poco mayores; el mismo presupuesto de triángulos que Solar.
         for (i, (nombre, distancia, radio, angulo, inclinacion)) in [
-            ("Gargantua", 0.0f32, 18.0, 0.0f32, 0.0),
-            ("Miller", 58.0, 7.0, 305.0, 0.12),
-            ("Mann", 104.0, 8.0, 210.0, 0.36),
-            ("Edmunds", 155.0, 8.5, 35.0, 0.45),
-            ("Thalos", 220.0, 11.0, 280.0, 0.52),
-            ("Nyx", 282.0, 9.2, 145.0, 0.18),
-            ("Aurora", 352.0, 9.0, 65.0, 0.38),
+            ("Gargantua", 0.0f32, RADIO_HORIZONTE, 0.0f32, 0.0),
+            ("Miller", 92.0, 7.0, 305.0, 0.12),
+            ("Mann", 145.0, 8.0, 210.0, 0.36),
+            ("Edmunds", 198.0, 8.5, 35.0, 0.45),
+            ("Thalos", 260.0, 11.0, 280.0, 0.52),
+            ("Nyx", 322.0, 9.2, 145.0, 0.18),
+            ("Aurora", 382.0, 9.0, 65.0, 0.38),
         ].into_iter().enumerate() {
             let a = angulo.to_radians();
             let orbita = if i == 0 { None } else {
@@ -60,10 +61,10 @@ impl Escena {
             }
             cuerpos.push(Cuerpo { nombre, pos: v3(distancia * a.cos(), 0.0, distancia * a.sin()), radio,
                 inclinacion, vel_rot: if i == 0 { 0.05 } else { 0.16 + i as f32 * 0.035 },
-                angulo: 0.0, shader: i, es_sol: i == 0, nubes: None, angulo_nubes: 0.0, orbita, anillos });
+                angulo: 0.0, shader: i, es_sol: false, nubes: None, angulo_nubes: 0.0, orbita, anillos });
         }
         Self { galaxia: Galaxia::Gargantua, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE,
-            cinturon: None, estacion: None, mallas, shaders, cuerpos,
+            cinturon: None, agujero_negro: Some(AgujeroNegro::nuevo()), estacion: None, mallas, shaders, cuerpos,
             asteroides: vec![], cols_ast: vec![], m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon: vec![], s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo }
     }
@@ -78,6 +79,8 @@ mod tests {
         let mut e = Escena::gargantua();
         assert_eq!(e.cuerpos.len(), 7);
         assert_eq!(e.cuerpos[1].nombre, "Miller");
+        assert!(e.cuerpos[0].radio > 18.0);
+        assert!(crate::agujero_negro::RADIO_DISCO + e.cuerpos[1].radio < e.cuerpos[1].pos.len());
         assert!(e.cinturon.is_none() && e.estacion.is_none());
         assert!(e.colisionadores_asteroides().is_empty());
         assert_eq!(e.cuerpos[4].anillos.len(), 2);
@@ -99,7 +102,7 @@ mod tests {
         let e = Escena::gargantua();
         let cuerpos = e.esferas();
         let mundo = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: RADIO_LIMITE,
-            alto_limite: ALTO_LIMITE, cinturon: None };
+            alto_limite: ALTO_LIMITE, gravedad: e.agujero_negro.as_ref().map(|a| a.campo), cinturon: None };
         let miller = &e.cuerpos[1];
         let mut n = Nave::fisica();
         n.establecer_reaparicion(INICIO);

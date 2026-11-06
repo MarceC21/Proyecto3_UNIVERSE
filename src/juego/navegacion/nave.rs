@@ -49,6 +49,7 @@ pub struct Mundo<'a> {
     pub radio_limite: f32,
     pub alto_limite: f32,
     pub cinturon: Option<(f32, f32)>,
+    pub gravedad: Option<crate::gravedad::CampoGravitatorio>,
 }
 
 // Entrada ya interpretada (la llena main.rs con raylib).
@@ -202,6 +203,7 @@ impl Nave {
             if self.destruida <= 0.0 { self.reaparecer(); }
             return;
         }
+        if m.gravedad.is_some_and(|g| g.captura(self.pos)) { self.capturar(); return; }
         self.golpe = (self.golpe - dt).max(0.0);
         self.inmune = (self.inmune - dt).max(0.0);
 
@@ -252,14 +254,19 @@ impl Nave {
         let deseo = self.fwd * (c.empuje * adelante) + der * (c.lateral * vmax * 0.6) + self.up * (c.vertical * vmax * 0.6);
         // Acelera despacio y frena un poco más rápido; independiente de los FPS.
         let k = if deseo.len() < self.vel.len() { 2.4 } else { 1.4 };
-        self.vel = self.vel + (deseo - self.vel) * (1.0 - (-k * dt).exp());
+        let respuesta = 1.0 - (-k * dt).exp();
+        let gravedad = m.gravedad.map(|g| g.aceleracion(self.pos)).unwrap_or(V3::ZERO);
+        // Integración del control amortiguado con aceleración externa constante
+        // durante dt: evita que el suavizado borre la atracción cada cuadro.
+        self.vel = self.vel + (deseo - self.vel) * respuesta + gravedad * (respuesta / k);
         let llama = if c.empuje > 0.0 { 1.0 + if c.turbo { 0.6 } else { 0.0 } } else { 0.12 };
         self.empuje_visual += (llama - self.empuje_visual) * (1.0 - (-6.0 * dt).exp());
 
         // Subpasos: el avance se parte en tramos de <= 0.3 unidades antes de colisionar.
         // En modo local, sin W/S la nave conserva su distancia al cuerpo: el
         // desplazamiento lateral/vertical se convierte en una ÓRBITA alrededor de él.
-        let mantener = self.local_activo && c.empuje.abs() < 0.05;
+        let orbitando_agujero = m.gravedad.is_some_and(|g| (self.objetivo - g.centro).len() < 0.01);
+        let mantener = self.local_activo && c.empuje.abs() < 0.05 && !orbitando_agujero;
         let radio_orbita = (self.pos - self.objetivo).len();
         if mantener {
             let radial = (self.pos - self.objetivo).norm();
@@ -273,9 +280,17 @@ impl Nave {
             if mantener {
                 self.pos = self.objetivo + (self.pos - self.objetivo).norm() * radio_orbita;
             }
+            if m.gravedad.is_some_and(|g| g.captura(self.pos)) { self.capturar(); return; }
             impacto = impacto.max(self.resolver_colisiones(m));
         }
         if impacto > 2.5 { self.golpear(impacto); }
+    }
+
+    fn capturar(&mut self) {
+        self.integridad = 0.0;
+        self.destruida = 2.5;
+        self.golpe = 0.5;
+        self.vel = V3::ZERO;
     }
 
     // Empuja la nave fuera de lo que toque y rebota. Devuelve la velocidad del impacto.
@@ -283,6 +298,8 @@ impl Nave {
         let mut impacto = 0.0f32;
         let der = self.derecha();
         for (cc, rr) in m.cuerpos.iter().chain(m.asteroides.iter()) {
+            // El horizonte captura, no funciona como una pared que rebota.
+            if m.gravedad.is_some_and(|g| (*cc - g.centro).len() < 0.01 && (*rr - g.radio_horizonte).abs() < 0.01) { continue; }
             // Rechazo rápido con una esfera que envuelve toda la nave.
             let d = self.pos - *cc;
             let lim = RADIO_ENVOLVENTE + rr;
@@ -379,14 +396,71 @@ mod pruebas {
     use crate::escena::*;
 
     fn mundo<'a>(cuerpos: &'a [(V3, f32)], ast: &'a [(V3, f32)]) -> Mundo<'a> {
-        Mundo { cuerpos, asteroides: ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, cinturon: Some((CINTURON_INT, CINTURON_EXT)) }
+        Mundo { cuerpos, asteroides: ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, gravedad: None, cinturon: Some((CINTURON_INT, CINTURON_EXT)) }
+    }
+
+    #[test]
+    fn gravedad_causa_deriva_pero_el_turbo_permite_escapar() {
+        let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
+        let cuerpos = [(g.centro, g.radio_horizonte)];
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+            cinturon: None, gravedad: Some(g) };
+        let deriva = |z| {
+            let mut n = Nave::fisica();
+            n.teletransportar(v3(0.0, 0.0, z), V3::ZERO);
+            for _ in 0..120 { n.actualizar(&Control::default(), 1.0 / 60.0, &m); }
+            z - n.pos.z
+        };
+        assert!(deriva(100.0) > 0.1);
+        assert!(deriva(45.0) > deriva(100.0) * 3.0);
+        let mut n = Nave::fisica();
+        n.teletransportar(v3(0.0, 0.0, 45.0), v3(0.0, 0.0, 100.0));
+        for _ in 0..180 { n.actualizar(&Control { empuje: 1.0, turbo: true, ..Default::default() }, 1.0 / 60.0, &m); }
+        assert!(n.pos.z > 70.0 && n.destruida == 0.0, "no pudo escapar: {:?}", n.pos);
+    }
+
+    #[test]
+    fn modo_local_no_anula_gravedad_del_agujero_y_cruzar_horizonte_reaparece() {
+        let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
+        let cuerpos = [(g.centro, g.radio_horizonte)];
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+            cinturon: None, gravedad: Some(g) };
+        let mut n = Nave::fisica();
+        n.establecer_reaparicion(crate::gargantua::INICIO);
+        n.teletransportar(v3(0.0, 0.0, 39.0), V3::ZERO);
+        n.modo_local = true;
+        for _ in 0..600 {
+            n.actualizar(&Control::default(), 1.0 / 60.0, &m);
+            if n.destruida > 0.0 { break; }
+        }
+        assert!(n.destruida > 0.0 && n.integridad == 0.0);
+        assert!(g.captura(n.pos));
+        n.actualizar(&Control::default(), 3.0, &m);
+        assert_eq!(n.pos, crate::gargantua::INICIO);
+        assert_eq!(n.integridad, 100.0);
+    }
+
+    #[test]
+    fn trayectoria_gravitatoria_consistente_entre_30_y_144_fps() {
+        let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
+        let cuerpos = [(g.centro, g.radio_horizonte)];
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+            cinturon: None, gravedad: Some(g) };
+        let mut posiciones = vec![];
+        for fps in [30, 144] {
+            let mut n = Nave::fisica();
+            n.teletransportar(v3(0.0, 0.0, 65.0), V3::ZERO);
+            for _ in 0..fps * 2 { n.actualizar(&Control::default(), 1.0 / fps as f32, &m); }
+            posiciones.push(n.pos);
+        }
+        assert!((posiciones[0] - posiciones[1]).len() < 0.2, "{:?}", posiciones);
     }
 
     #[test]
     fn impacto_en_un_cuadro_largo_no_atraviesa_roca() {
         let ast = [(V3::ZERO, 1.0)];
         let m = Mundo { cuerpos: &[], asteroides: &ast, radio_limite: 1000.0,
-            alto_limite: 1000.0, cinturon: Some((104.0, 136.0)) };
+            alto_limite: 1000.0, gravedad: None, cinturon: Some((104.0, 136.0)) };
         let mut n = Nave::fisica();
         n.teletransportar(v3(0.0, 0.0, -6.0), V3::ZERO);
         n.vel = v3(0.0, 0.0, 400.0);

@@ -18,6 +18,8 @@ fn main() {
     let mut fb = Framebuffer::new(960, 600);
     let mut nave = Nave::predeterminada().unwrap();
     let mut vistas = escena.vistas();
+    vistas.push(("agujero_cerca".into(), v3(0.0, 12.0, 65.0), V3::ZERO));
+    vistas.push(("agujero_lateral".into(), v3(85.0, 18.0, 50.0), V3::ZERO));
     let thalos = escena.cuerpos.iter().find(|c| c.nombre == "Thalos").unwrap();
     vistas.push(("doble_anillo".into(), thalos.pos + (escena.pos_sol() - thalos.pos).norm() * 57.0 + v3(0.0, 27.0, 0.0), thalos.pos));
     for (nombre, pos, objetivo) in vistas {

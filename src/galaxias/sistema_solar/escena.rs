@@ -53,6 +53,7 @@ pub struct Escena {
     pub radio_limite: f32,
     pub alto_limite: f32,
     pub cinturon: Option<(f32, f32)>,
+    pub agujero_negro: Option<crate::agujero_negro::AgujeroNegro>,
     pub(crate) asteroides: Vec<Asteroide>,
     pub(crate) cols_ast: Vec<(V3, f32)>,
     pub(crate) m_cuadrado: usize,
@@ -179,7 +180,7 @@ impl Escena {
         let estacion = Some(Estacion::nueva(tierra.pos, cuerpos[0].pos));
         Escena {
             galaxia: Galaxia::Solar, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE,
-            cinturon: Some((CINTURON_INT, CINTURON_EXT)),
+            cinturon: Some((CINTURON_INT, CINTURON_EXT)), agujero_negro: None,
             mallas, shaders, cuerpos, estacion, asteroides, cols_ast, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon, s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo,
         }
@@ -214,6 +215,10 @@ impl Escena {
                 c.anillos.iter().map(|(m, _)| self.mallas[*m].radio * 0.6).fold(1.0, f32::max)
             } else { 1.0 };
             cam.vista_esfera(c.pos, c.radio * encuadre, self.pos_sol());
+            if self.agujero_negro.is_some() && c.nombre == "Gargantua" {
+                cam.pos = v3(0.0, 23.0, 110.0);
+                cam.mirar_a(c.pos);
+            }
             let (f, _, _) = cam.base();
             v.push((c.nombre.to_lowercase(), cam.pos, cam.pos + f));
         }
@@ -286,6 +291,8 @@ impl Escena {
                 }
             }
         }
+
+        if let Some(agujero) = &self.agujero_negro { agujero.emitir(cam, aj, out, st); }
 
         // Estación OBJ: cada material conserva su malla y shader. La esfera
         // envolvente descarta el conjunto antes de transformar sus vértices.

@@ -93,6 +93,16 @@ impl Camara {
 
     // `esferas`: (centro, radio) de los cuerpos sólidos, para colisión y velocidad.
     pub fn actualizar(&mut self, e: &Entrada, dt: f32, esferas: &[(V3, f32)], radio_limite: f32, alto_limite: f32) {
+        self.actualizar_modo(e, dt, esferas, radio_limite, alto_limite, None);
+    }
+
+    // Mismo control, suavizado y resolución de colisiones que en vuelo libre.
+    // La superficie fija la altura y permite una velocidad propia de la misión.
+    pub fn actualizar_superficie(&mut self, e: &Entrada, dt: f32, esferas: &[(V3, f32)], velocidad: f32) {
+        self.actualizar_modo(e, dt, esferas, 180.0, 100.0, Some(velocidad));
+    }
+
+    fn actualizar_modo(&mut self, e: &Entrada, dt: f32, esferas: &[(V3, f32)], radio_limite: f32, alto_limite: f32, superficie: Option<f32>) {
         self.yaw += e.giro_x * SENSIBILIDAD;
         self.pitch = (self.pitch - e.giro_y * SENSIBILIDAD).clamp(-1.5, 1.5);
         self.yaw %= std::f32::consts::TAU;
@@ -101,11 +111,12 @@ impl Camara {
         // rápido en el espacio abierto, lento y preciso cerca de una superficie.
         let mut alt = f32::MAX;
         for (c, r) in esferas { alt = alt.min((self.pos - *c).len() - r); }
-        let base = (alt * 0.8).clamp(1.5, 45.0) * if e.turbo { 3.5 } else { 1.0 };
+        let base = superficie.unwrap_or_else(|| (alt * 0.8).clamp(1.5, 45.0) * if e.turbo { 3.5 } else { 1.0 });
 
         let (f, r, _) = self.base();
         let u = v3(0.0, 1.0, 0.0);
-        let deseo = f * e.adelante + r * e.lateral + u * e.vertical;
+        let f = if superficie.is_some() { v3(f.x, 0.0, f.z).norm() } else { f };
+        let deseo = f * e.adelante + r * e.lateral + u * if superficie.is_some() { 0.0 } else { e.vertical };
         let objetivo = if deseo.len() > 1.0 { deseo.norm() * base } else { deseo * base };
         // Aceleración/frenado progresivos con suavizado exponencial (independiente de los FPS).
         let t = 1.0 - (-5.0 * dt).exp();
@@ -134,6 +145,7 @@ impl Camara {
             self.pos.z *= k;
         }
         self.pos.y = self.pos.y.clamp(-(alto_limite - 2.0), alto_limite - 2.0);
+        if superficie.is_some() { self.pos.y = 1.7; self.vel.y = 0.0; }
     }
 
     // Distancia al muro del límite (positiva dentro).

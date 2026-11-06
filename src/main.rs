@@ -33,8 +33,12 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let mut ruta = None;
     let mut galaxia_inicial = Galaxia::Solar;
+    let mut iniciar_miller = false;
     while let Some(arg) = args.next() {
-        if arg == "--galaxia" {
+        if arg == "--miller" {
+            iniciar_miller = true;
+            galaxia_inicial = Galaxia::Gargantua;
+        } else if arg == "--galaxia" {
             galaxia_inicial = match args.next().as_deref() {
                 Some("gargantua") => Galaxia::Gargantua,
                 Some("solar") => Galaxia::Solar,
@@ -43,6 +47,7 @@ fn main() {
         } else if ruta.is_none() { ruta = Some(arg); }
         else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
     }
+    if iniciar_miller { galaxia_inicial = Galaxia::Gargantua; }
     let mut nave = match ruta.as_deref() {
         Some(ruta) => Nave::cargar(ruta),
         None => Nave::predeterminada(),
@@ -86,10 +91,30 @@ fn main() {
     let mut salto = Salto::default();
     let mut mapa = Mapa::default();
     let mut mapa_abierto = false;
+    let mut miller = nave_raster::interfaz_miller::SuperficieMiller::default();
+    let mut miller_armado = true;
+    if iniciar_miller { miller.entrar(); }
 
     while !window.window_should_close() {
         let dt = window.get_frame_time().clamp(0.0005, 0.1);
         tiempo += dt;
+
+        if miller.activa {
+            let salir = miller.cuadro(&mut window, &thread, &nave);
+            if miller.exitosa() { progreso.completar(Galaxia::Gargantua); }
+            if salir {
+                let planeta = escena.cuerpos.iter().find(|c| c.nombre == "Miller").expect("falta Miller");
+                // Despegar por el lado exterior evita caer hacia Gargantua.
+                let radial = planeta.pos.norm();
+                let pos = planeta.pos + radial * (planeta.radio + 12.0);
+                nave.teletransportar(pos, pos + radial);
+                nave.modo_local = false;
+                seguimiento.reiniciar(nave.fwd, nave.up);
+                miller_armado = false;
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            }
+            continue;
+        }
 
         // La misión conserva su progreso entre visitas y consume su propia
         // entrada: al seleccionar botones nunca se mueve ni daña la nave.
@@ -251,6 +276,7 @@ fn main() {
                 radio_limite: escena.radio_limite,
                 alto_limite: escena.alto_limite,
                 cinturon: escena.cinturon,
+                gravedad: escena.agujero_negro.as_ref().map(|a| a.campo),
             };
             nave.actualizar(&control, dt, &mundo);
             seguimiento.actualizar(&mut cam, nave.pos, nave.fwd, nave.up, nave.velocidad(), dt,
@@ -263,9 +289,19 @@ fn main() {
             nave.vel = V3::ZERO;
             window.enable_cursor();
         }
+        let altura_miller = escena.cuerpos.iter().find(|c| c.nombre == "Miller")
+            .map(|c| (nave.pos - c.pos).len() - c.radio).unwrap_or(f32::INFINITY);
+        if altura_miller > 10.0 { miller_armado = true; }
+        if escena.galaxia == Galaxia::Gargantua && miller_armado && !progreso.completada(Galaxia::Gargantua)
+            && !camara_libre && nave.destruida <= 0.0 && (0.0..=6.5).contains(&altura_miller) && nave.velocidad() <= 6.0 {
+            miller.entrar();
+            miller_armado = false;
+            nave.vel = V3::ZERO;
+            window.disable_cursor();
+        }
         let distancia_borde_nave = escena.radio_limite - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
         if salto.observar(&progreso, distancia_borde_nave,
-            !camara_libre && nave.destruida <= 0.0 && mision_marte.fase == FaseMarte::Espacio) {
+            !camara_libre && nave.destruida <= 0.0 && mision_marte.fase == FaseMarte::Espacio && !miller.activa) {
             nave.vel = V3::ZERO;
             nave.modo_local = false;
             mapa_abierto = true;
@@ -361,9 +397,26 @@ fn main() {
             d.draw_text("MARTE: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
                 16, sh as i32 - 88, 17, Color::new(255, 190, 132, 255));
         }
+        if !camara_libre && altura_miller < 24.0 && !progreso.completada(Galaxia::Gargantua) {
+            d.draw_text("MILLER: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
+                16, sh as i32 - 88, 17, Color::new(130, 230, 240, 255));
+        }
         if progreso.motor_activo() {
             d.draw_text("MOTOR LISTO / [M] MAPA INTERESTELAR", sw as i32 - 400, sh as i32 - 30,
                 17, Color::new(131, 239, 163, 255));
+        }
+
+        if let Some(agujero) = &escena.agujero_negro {
+            let intensidad = agujero.campo.intensidad(nave.pos);
+            if !camara_libre && intensidad > 0.025 {
+                let hacia_agujero = nave.local_activo && (nave.objetivo - agujero.campo.centro).len() < 0.01;
+                let advertencia = if hacia_agujero { "ATRACCION: F LIBERA LA ORIENTACION / GIRA HACIA FUERA Y USA W + SHIFT" }
+                    else if intensidad > 0.45 { "PELIGRO: ATRACCION FUERTE / ORIENTA HACIA FUERA Y USA W + SHIFT" }
+                    else { "CAMPO GRAVITATORIO / LOS MOTORES DEBEN COMPENSAR LA ATRACCION" };
+                d.draw_text(advertencia, 16, sh as i32 - 92, 17, Color::new(255, 186, 94, 255));
+                d.draw_rectangle(16, sh as i32 - 69, 210, 5, Color::new(40, 30, 20, 220));
+                d.draw_rectangle(16, sh as i32 - 69, (210.0 * intensidad) as i32, 5, Color::new(255, 166, 68, 255));
+            }
         }
 
         // Integridad de la nave.
