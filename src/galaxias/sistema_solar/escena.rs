@@ -1,5 +1,5 @@
 // El sistema solar: qué existe, dónde está y cómo se anima.
-// Solo los planetas ROTAN sobre su eje (no hay órbitas); todo lo demás es estático.
+// Solo los planetas ROTAN sobre su eje 
 use crate::camara::Camara;
 use crate::dibujo::*;
 use crate::estacion::Estacion;

@@ -43,6 +43,7 @@ mod tests {
         let mut p = Progreso::default();
         let mut s = Salto::default();
         assert!(!s.observar(&p, 2.0, true));
+        p.completar_estacion();
         p.completar_marte();
         assert!(!s.observar(&p, 2.0, false));
         assert!(!s.observar(&p, 20.0, true));

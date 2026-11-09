@@ -19,12 +19,16 @@ impl Galaxia {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Progreso {
+    estacion: bool,
     completadas: [bool; 4],
     ruta: Option<Galaxia>,
     actual: Galaxia,
 }
 
 impl Progreso {
+    pub fn estacion_completada(&self) -> bool { self.estacion }
+    pub fn completar_estacion(&mut self) { self.estacion = true; }
+    pub fn marte_disponible(&self) -> bool { self.estacion }
     pub fn marte_completado(&self) -> bool { self.completadas[0] }
     pub fn mapa_activo(&self) -> bool { self.marte_completado() }
     pub fn motor_activo(&self) -> bool { self.marte_completado() }
@@ -45,6 +49,7 @@ impl Progreso {
 
     // Las próximas escenas llamarán aquí solo al terminar su misión.
     pub fn completar(&mut self, g: Galaxia) -> bool {
+        if g == Galaxia::Solar && !self.marte_disponible() { return false; }
         if !self.desbloqueada(g) || self.completada(g) { return false; }
         self.completadas[g.indice()] = true;
         if let Some(siguiente) = GALAXIAS.get(g.indice() + 1) { self.ruta = Some(*siguiente); }
@@ -63,9 +68,22 @@ impl Progreso {
 mod tests {
     use super::*;
     #[test]
+    fn estacion_abre_marte_sin_adelantar_motor_y_el_reinicio_borra_todo() {
+        let mut p = Progreso::default();
+        assert!(!p.marte_disponible());
+        assert!(!p.completar_marte());
+        p.completar_estacion();
+        assert!(p.marte_disponible());
+        assert!(!p.motor_activo() && !p.mapa_activo());
+        assert!(p.completar_marte());
+        assert!(p.motor_activo());
+        assert!(!Progreso::default().estacion_completada());
+    }
+    #[test]
     fn viajar_a_gargantua_y_volver_no_completa_miller_ni_revela_tau_ceti() {
         let mut p = Progreso::default();
         assert!(!p.viajar(Galaxia::Gargantua));
+        p.completar_estacion();
         p.completar_marte();
         assert!(p.viajar(Galaxia::Gargantua));
         assert_eq!(p.actual(), Galaxia::Gargantua);
@@ -86,6 +104,7 @@ mod tests {
         let mut p = Progreso::default();
         assert!(!p.mapa_activo());
         assert!(!p.seleccionar_ruta(Galaxia::Gargantua));
+        p.completar_estacion();
         assert!(p.completar_marte());
         assert!(p.mapa_activo() && p.motor_activo());
         assert_eq!(p.ruta(), Some(Galaxia::Gargantua));
@@ -98,6 +117,7 @@ mod tests {
     fn escenas_futuras_revelan_destinos_en_orden() {
         let mut p = Progreso::default();
         assert!(!p.completar(Galaxia::TauCeti));
+        p.completar_estacion();
         p.completar_marte();
         p.completar(Galaxia::Gargantua);
         assert!(p.desbloqueada(Galaxia::TauCeti));
@@ -117,6 +137,7 @@ mod tests {
         }
         let mut p = Progreso::default();
         assert!(m.maquina.aceptada());
+        p.completar_estacion();
         p.completar_marte();
         m.marcar_completada();
         m.despegar();
@@ -133,6 +154,7 @@ mod tests {
     #[test]
     fn una_nueva_partida_reinicia_marte_motor_mapa_y_ruta() {
         let mut anterior = Progreso::default();
+        anterior.completar_estacion();
         anterior.completar_marte();
         assert!(anterior.marte_completado() && anterior.motor_activo());
         assert!(anterior.mapa_activo());

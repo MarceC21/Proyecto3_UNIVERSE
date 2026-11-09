@@ -17,6 +17,7 @@ use nave_raster::progreso::{Galaxia, Progreso};
 use nave_raster::salto::Salto;
 use nave_raster::mapa::Mapa;
 use raylib::prelude::*;
+use nave_raster::aventura::{Aventura, Evento as EventoInterior};
 
 fn completar_marte(mision: &mut MisionMarte, progreso: &mut Progreso) {
     if mision.maquina.aceptada() {
@@ -34,8 +35,11 @@ fn main() {
     let mut ruta = None;
     let mut galaxia_inicial = Galaxia::Solar;
     let mut iniciar_miller = false;
+    let mut iniciar_estacion = false;
     while let Some(arg) = args.next() {
-        if arg == "--miller" {
+        if arg == "--estacion" {
+            iniciar_estacion = true;
+        } else if arg == "--miller" {
             iniciar_miller = true;
             galaxia_inicial = Galaxia::Gargantua;
         } else if arg == "--galaxia" {
@@ -48,6 +52,7 @@ fn main() {
         else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
     }
     if iniciar_miller { galaxia_inicial = Galaxia::Gargantua; }
+    if iniciar_estacion { galaxia_inicial = Galaxia::Solar; iniciar_miller = false; }
     let mut nave = match ruta.as_deref() {
         Some(ruta) => Nave::cargar(ruta),
         None => Nave::predeterminada(),
@@ -84,6 +89,7 @@ fn main() {
     let mut progreso = Progreso::default();
     if galaxia_inicial == Galaxia::Gargantua {
         // Acceso de inspección; la partida normal conserva el desbloqueo de Marte.
+        progreso.completar_estacion();
         progreso.completar_marte();
         progreso.viajar(Galaxia::Gargantua);
         mision_marte.marcar_completada();
@@ -94,10 +100,33 @@ fn main() {
     let mut miller = nave_raster::interfaz_miller::SuperficieMiller::default();
     let mut miller_armado = true;
     if iniciar_miller { miller.entrar(); }
+    let mut aventura: Option<Aventura> = None;
+    let mut visor_interior = nave_raster::interfaz_interior::VisorInterior::default();
+    if iniciar_estacion {
+        let est = escena.estacion.as_ref().expect("falta estacion");
+        let pos = est.pos + v3(0.0, 3.0, 10.0);
+        nave.teletransportar(pos, est.pos);
+        let mut a = Aventura::nueva();
+        a.iniciar_atraque(nave.pos, nave.fwd, est.pos, est.radio, est.rot);
+        aventura = Some(a);
+    }
 
     while !window.window_should_close() {
         let dt = window.get_frame_time().clamp(0.0005, 0.1);
         tiempo += dt;
+
+        if let Some(a) = aventura.as_mut().filter(|a| a.activa()) {
+            let evento = visor_interior.cuadro(&mut window, &thread, a, &mut nave, &escena, &cielo, &aj, dt);
+            if evento == EventoInterior::Desacoplar {
+                if a.completada() { progreso.completar_estacion(); }
+                let (pos, objetivo) = a.pose_desacople();
+                nave.teletransportar(pos, objetivo);
+                nave.modo_local = false;
+                seguimiento.reiniciar(nave.fwd, nave.up);
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            }
+            continue;
+        }
 
         if miller.activa {
             let salir = miller.cuadro(&mut window, &thread, &nave);
@@ -285,7 +314,17 @@ fn main() {
 
         let altura_marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte")
             .map(|c| (nave.pos - c.pos).len() - c.radio).unwrap_or(f32::INFINITY);
-        if mision_marte.observar(altura_marte, nave.velocidad(), !camara_libre && nave.destruida <= 0.0) {
+        if window.is_key_pressed(KeyboardKey::KEY_E) && !camara_libre && nave.destruida <= 0.0 {
+            if let Some(est) = &escena.estacion {
+                if Aventura::puede_atracar(nave.pos,nave.velocidad(),est.pos,est.radio,true) {
+                    let a = aventura.get_or_insert_with(Aventura::nueva);
+                    a.iniciar_atraque(nave.pos,nave.fwd,est.pos,est.radio,est.rot);
+                    nave.vel = V3::ZERO;
+                }
+            }
+        }
+        let en_vuelo = !camara_libre && nave.destruida <= 0.0 && !aventura.as_ref().is_some_and(|a| a.activa());
+        if mision_marte.observar(altura_marte, nave.velocidad(), en_vuelo && progreso.marte_disponible()) {
             nave.vel = V3::ZERO;
             window.enable_cursor();
         }
@@ -301,7 +340,7 @@ fn main() {
         }
         let distancia_borde_nave = escena.radio_limite - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
         if salto.observar(&progreso, distancia_borde_nave,
-            !camara_libre && nave.destruida <= 0.0 && mision_marte.fase == FaseMarte::Espacio && !miller.activa) {
+            en_vuelo && mision_marte.fase == FaseMarte::Espacio && !miller.activa) {
             nave.vel = V3::ZERO;
             nave.modo_local = false;
             mapa_abierto = true;
@@ -394,8 +433,23 @@ fn main() {
             d.draw_text(&t, 16, (sh as i32) - 60, 18, Color::new(120, 255, 240, 255));
         }
         if !camara_libre && altura_marte < 18.0 && !mision_marte.completada() {
-            d.draw_text("MARTE: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
+            d.draw_text(if progreso.marte_disponible() { "MARTE: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar" }
+                else { "MARTE BLOQUEADO: visita la estacion, recoge provisiones e instala los sistemas primero [T]" },
                 16, sh as i32 - 88, 17, Color::new(255, 190, 132, 255));
+        }
+        if escena.galaxia == Galaxia::Solar && !camara_libre {
+            if !progreso.estacion_completada() {
+                d.draw_text("PRIMERA MISION: visita la estacion junto a la Tierra [T]", 16, 188, 17, Color::new(111,232,239,255));
+            }
+            if let Some(est) = &escena.estacion {
+                let cerca = (nave.pos-est.pos).len()-est.radio < 14.0;
+                if cerca {
+                    let texto = if Aventura::puede_atracar(nave.pos,nave.velocidad(),est.pos,est.radio,nave.destruida<=0.0) {
+                        "[E] ATRACAR EN LA ESTACION - CABINA / TARS / PROVISIONES"
+                    } else { "ESTACION: acercate y reduce la velocidad a 6 para atracar" };
+                    d.draw_text(texto,16,sh as i32-112,17,Color::new(111,232,239,255));
+                }
+            }
         }
         if !camara_libre && altura_miller < 24.0 && !progreso.completada(Galaxia::Gargantua) {
             d.draw_text("MILLER: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",

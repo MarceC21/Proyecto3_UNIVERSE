@@ -67,3 +67,25 @@ pub mod mision_miller;
 #[cfg(feature = "ventana")]
 #[path = "galaxias/gargantua/miller/interfaz.rs"]
 pub mod interfaz_miller;
+
+#[path = "juego/cabina/construccion.rs"]
+pub mod construccion;
+#[path = "juego/cabina/materiales.rs"]
+pub mod materiales;
+#[path = "juego/cabina/dibujo_interior.rs"]
+pub mod dibujo_interior;
+#[path = "juego/cabina/jugador.rs"]
+pub mod jugador;
+#[path = "juego/cabina/nave_interior.rs"]
+pub mod nave_interior;
+#[path = "juego/cabina/estacion_interior.rs"]
+pub mod estacion_interior;
+#[path = "juego/cabina/tars.rs"]
+pub mod tars;
+#[path = "juego/estados/inventario.rs"]
+pub mod inventario;
+#[path = "juego/estados/aventura.rs"]
+pub mod aventura;
+#[cfg(feature = "ventana")]
+#[path = "juego/cabina/interfaz.rs"]
+pub mod interfaz_interior;

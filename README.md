@@ -46,12 +46,57 @@ motores están configurados para el modelo incluido.
 
 Los atajos trasladan la nave en modo seguimiento y la cámara en modo libre.
 Las colisiones de la nave con planetas y asteroides usan subpasos, rebote,
-daño y reaparición. El acoplamiento y las colisiones de la estación están pendientes.
+daño y reaparición. La estación tiene una maniobra de atraque y un recorrido
+interior con colisiones de paredes, muebles, puertas y TARS.
 Los planetas actualmente rotan sobre su eje; sus posiciones orbitales son fijas.
+
+## Primera misión: estación e interior de la nave
+
+Visita la estación junto a la Tierra. **T** sirve para acercarte rápidamente;
+reduce la velocidad a **6 o menos** y pulsa **E** cuando aparezca el aviso de
+atraque. La maniobra aproxima la nave y hace un fundido hacia la cabina.
+En cámara libre no se puede atracar. Para probar directamente este recorrido:
+
+```bash
+cargo run --release -- --estacion
+```
+
+1. Habla con **TARS** usando **E** cerca de él. Patrulla la cabina con sus
+   cuatro columnas animadas y explica qué provisiones hacen falta.
+2. Ve hacia atrás: la puerta de la cabina se abre al aproximarte. En la esclusa,
+   usa **E** en el panel para abrir la escotilla. Recorre el túnel y pulsa **E**
+   en su extremo para entrar a la estación.
+3. Recorre el núcleo, los brazos y el anillo. Recoge con **E** la celda de energía,
+   el cable de fibra, el cristal de navegación, el tanque de oxígeno y el chip
+   cuántico. El minimapa señala los materiales pendientes y el regreso a la nave.
+4. Regresa por el muelle, vuelve a la cabina e instala lo recogido en el
+   **Núcleo de sistemas**, en el muro de mando de la derecha. Puedes instalar
+   materiales en varias visitas; no se duplican los ya recogidos.
+5. Con los cinco instalados, ve a la **consola de pilotaje**, al frente, y usa
+   **E** para desacoplar. Ahora queda disponible el aterrizaje en **Marte**.
+
+Dentro: **WASD** caminar, **ratón/flechas** mirar, **Shift** correr, **E**
+interactuar, **I** mostrar/ocultar inventario, **Tab** cursor y **F1–F3** calidad.
+En el inventario, `-` indica pendiente, `*` en mochila y `+` instalado.
+**X/Esc** vuelve al vuelo y conserva los materiales durante la sesión para
+retomar el recorrido. Salir antes de activar los sistemas deja Marte bloqueado.
+Todo el progreso se reinicia al cerrar el juego.
+
+La cabina, el planetario, los monitores, la esclusa, el interior de la estación
+y TARS reutilizan los módulos y el OBJ entregados. La geometría y los shaders
+se dibujan con el rasterizador de Rust; raylib presenta el framebuffer y el HUD.
+Las ventanas de la cabina muestran el sistema exterior; las de la estación
+muestran el cielo. No se usa ray tracing para estos interiores.
+
+Para generar vistas sin ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_interior -- /tmp/interiores
+```
 
 ## Marte: terminal de Turing
 
-Acércate a Marte a una altura de 6.5 unidades o menos y una velocidad de 6 o
+Primero completa la misión de la estación. Después acércate a Marte a una altura de 6.5 unidades o menos y una velocidad de 6 o
 menos. El aterrizaje se activa automáticamente al llegar despacio. Para probarlo
 rápido, pulsa **5** en modo nave; en cámara libre (**V**) no se activa la misión.
 Se anima el aterrizaje de la nave durante cinco segundos. Después se muestran
@@ -249,6 +294,10 @@ mientras `--miller` abre el minijuego interactivo integrado.
 - `src/motor/fisica/gravedad.rs`: campo de atracción independiente de raylib.
 - `src/motor/cielo.rs`: generador de skybox para cada sistema.
 - `assets/compartidos/nave/`: OBJ y MTL copiados del proyecto previo `Lab4/nave_raster`.
+- `assets/compartidos/tars/`: OBJ y MTL del TARS entregado.
+- `src/juego/cabina/`: construcción, materiales, interiores, jugador, TARS y presentación.
+- `src/juego/estados/aventura.rs`: atraque, esclusa, recorrido y activación de sistemas.
+- `src/juego/estados/inventario.rs`: cinco provisiones, mochila e instalación.
 - `assets/galaxias/sistema_solar/estacion/`: modelo, materiales y generador de la estación.
 - `src/bin/exportar.rs`: vistas del sistema solar sin ventana.
 - `src/bin/exportar_gargantua.rs`: vistas y tiempos del nuevo sistema sin ventana.
