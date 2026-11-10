@@ -279,7 +279,8 @@ fn main() {
                 (KeyboardKey::KEY_FOUR,"ceti nova"),(KeyboardKey::KEY_FIVE,"oceanus"),
                 (KeyboardKey::KEY_SIX,"saturn"),(KeyboardKey::KEY_SEVEN,"ceti nova ii"),
                 (KeyboardKey::KEY_EIGHT,"veridia"),(KeyboardKey::KEY_NINE,"aethel"),
-                (KeyboardKey::KEY_U,"cinturon"),(KeyboardKey::KEY_N,"limite")]
+                (KeyboardKey::KEY_U,"cinturon"),(KeyboardKey::KEY_N,"limite"),
+                (KeyboardKey::KEY_T,"nave_cafe")]
         };
         for (tecla, nombre) in teclas {
             if window.is_key_pressed(tecla) {
@@ -361,6 +362,9 @@ fn main() {
             }
         }
         let en_vuelo = !camara_libre && nave.destruida <= 0.0 && !aventura.as_ref().is_some_and(|a| a.activa());
+        if let Some(n) = &escena.nave_cafe {
+            progreso.observar_nave_cafe((nave.pos-n.pos).len()-n.radio,nave.velocidad(),en_vuelo);
+        }
         if mision_marte.observar(altura_marte, nave.velocidad(), en_vuelo && progreso.marte_disponible()) {
             nave.vel = V3::ZERO;
             window.enable_cursor();
@@ -434,6 +438,17 @@ fn main() {
                 }
             }
         }
+        if let Some(n) = &escena.nave_cafe {
+            if let Some((sx,sy,_)) = cam.proyectar(n.pos+v3(0.0,n.radio,0.0)) {
+                d.draw_text(&format!("Blip-A ({:.0})",(referencia-n.pos).len()),
+                    (ox+sx*escala) as i32-55,(oy+sy*escala) as i32-16,17,Color::new(255,200,117,255));
+            }
+            if !camara_libre && (nave.pos-n.pos).len()-n.radio < 15.0 {
+                d.draw_text(if progreso.nave_cafe_visitada() { "Blip-A VISITADA / SIGUIENTE DESTINO: ADRIEN" }
+                    else { "Blip-A: acercate a menos de 6 y baja la velocidad a 6" },
+                    16,sh as i32-112,17,Color::new(255,200,117,255));
+            }
+        }
         // Mira: hacia dónde apunta la nariz.
         if let Some((sx, sy, _)) = punto_mira {
             let (x, y) = ((ox + sx * escala) as i32, (oy + sy * escala) as i32);
@@ -464,7 +479,7 @@ fn main() {
             d.draw_text("6 Nyx  7 Aurora  8 limite  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
         } else {
             d.draw_text("TAU CETI: 0 general  1 estrella  2 Adrien  3 Gigante  4 Ceti Nova  5 Oceanus",16,124,14,Color::LIGHTGRAY);
-            d.draw_text("6 Saturn  7 Ceti Nova II  8 Veridia  9 Aethel  U cinturon  N limite  M mapa",16,144,14,Color::LIGHTGRAY);
+            d.draw_text("6 Saturn 7 Ceti Nova II 8 Veridia 9 Aethel T Blip-A U cinturon N limite M mapa",16,144,14,Color::LIGHTGRAY);
         }
 
         // Modo local (rodear un cuerpo).

@@ -49,6 +49,7 @@ pub struct Escena {
     pub(crate) shaders: Vec<Box<dyn Shader>>,
     pub cuerpos: Vec<Cuerpo>,
     pub estacion: Option<Estacion>,
+    pub nave_cafe: Option<Estacion>,
     pub galaxia: Galaxia,
     pub radio_limite: f32,
     pub alto_limite: f32,
@@ -181,7 +182,7 @@ impl Escena {
         Escena {
             galaxia: Galaxia::Solar, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE,
             cinturon: Some((CINTURON_INT, CINTURON_EXT)), agujero_negro: None,
-            mallas, shaders, cuerpos, estacion, asteroides, cols_ast, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
+            mallas, shaders, cuerpos, estacion, nave_cafe: None, asteroides, cols_ast, m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon, s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo,
         }
     }
@@ -198,10 +199,14 @@ impl Escena {
 
     pub fn colisionadores_asteroides(&self) -> &[(V3, f32)] { &self.cols_ast }
 
-    pub fn esferas(&self) -> Vec<(V3, f32)> { self.cuerpos.iter().map(|c| (c.pos, c.radio)).collect() }
+    pub fn esferas(&self) -> Vec<(V3, f32)> {
+        self.cuerpos.iter().map(|c| (c.pos, c.radio))
+            .chain(self.nave_cafe.iter().map(|n| (n.pos,n.radio))).collect()
+    }
 
     pub fn cuerpo_cercano(&self, p: V3) -> (&'static str, f32) {
         self.cuerpos.iter().map(|c| (c.nombre, (p - c.pos).len() - c.radio))
+            .chain(self.nave_cafe.iter().map(|n| ("Blip-A",(p-n.pos).len()-n.radio)))
             .fold(self.estacion.as_ref().map(|e| ("Estacion", (p - e.pos).len() - e.radio))
                 .unwrap_or(("", f32::MAX)), |a, b| if b.1 < a.1 { b } else { a })
     }
@@ -233,6 +238,12 @@ impl Escena {
             // Más altura para ver el anillo, los brazos y los paneles solares.
             cam.pos.y += estacion.radio * 1.6;
             v.push(("estacion".to_string(), cam.pos, estacion.pos));
+        }
+        if let Some(nave) = &self.nave_cafe {
+            let mut cam = Camara::nueva(100.0,100.0);
+            cam.vista_esfera(nave.pos,nave.radio,self.pos_sol());
+            cam.pos.y += nave.radio*1.2;
+            v.push(("nave_cafe".to_string(),cam.pos,nave.pos));
         }
         v
     }
@@ -297,7 +308,7 @@ impl Escena {
 
         // Estación OBJ: cada material conserva su malla y shader. La esfera
         // envolvente descarta el conjunto antes de transformar sus vértices.
-        if let Some(e) = &self.estacion {
+        for e in self.estacion.iter().chain(self.nave_cafe.iter()) {
             let visible = !aj.culling || cam.esfera_visible(e.pos, e.radio);
             let distancia = (e.pos - cam.pos).len();
             for (malla, shader) in &e.partes {

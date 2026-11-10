@@ -283,6 +283,7 @@ impl Escena {
             })
             .collect();
 
+        let nave_cafe = Some(crate::nave_cafe::crear(&cuerpos));
         Self {
             galaxia: Galaxia::TauCeti,
             radio_limite: RADIO_LIMITE,
@@ -290,6 +291,7 @@ impl Escena {
             cinturon: Some((CINTURON_INT, CINTURON_EXT)),
             agujero_negro: None,
             estacion: None,
+            nave_cafe,
             mallas,
             shaders,
             cuerpos,

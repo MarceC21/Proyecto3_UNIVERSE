@@ -68,12 +68,19 @@ impl Estacion {
             include_str!("../../../assets/galaxias/sistema_solar/estacion/estacion.obj"),
             include_str!("../../../assets/galaxias/sistema_solar/estacion/estacion.mtl"),
         ).expect("el recurso de la estación debe ser un OBJ válido");
+        let hacia_sol = (sol - tierra).norm();
+        let tangente = v3(0.0, 1.0, 0.0).cross(hacia_sol).norm();
+        let pos = tierra + hacia_sol * 7.0 + tangente * 10.0 + v3(0.0, 2.0, 0.0);
+        Self::desde_modelo(modelo, 3.2, pos, Rot::rot_y(0.35).mul(&Rot::rot_z(0.12)))
+    }
+
+    // Emisor OBJ compartido por la estación y la nave de encuentro de Tau Ceti.
+    pub(crate) fn desde_modelo(modelo: Modelo, radio: f32, pos: V3, rot: Rot) -> Self {
         let (centro, _) = modelo.centro_y_radio();
         let centro = v3(centro[0], centro[1], centro[2]);
         let vector = |v: &[f32; 3]| v3(v[0], v[1], v[2]);
         let radio_original = modelo.vertices.iter()
             .map(|v| (vector(v) - centro).len()).fold(0.0, f32::max);
-        let radio = 3.2;
         let escala = radio / radio_original;
         let mut partes = Vec::new();
         for (i, material) in modelo.materiales.iter().enumerate() {
@@ -92,12 +99,6 @@ impl Estacion {
                 partes.push((m, ShaderEstacion::nuevo(&material.nombre, vector(&material.color))));
             }
         }
-        let hacia_sol = (sol - tierra).norm();
-        let tangente = v3(0.0, 1.0, 0.0).cross(hacia_sol).norm();
-        Self {
-            // Separada de la atmósfera y del corredor de aproximación a Tierra.
-            pos: tierra + hacia_sol * 7.0 + tangente * 10.0 + v3(0.0, 2.0, 0.0),
-            radio, rot: Rot::rot_y(0.35).mul(&Rot::rot_z(0.12)), partes,
-        }
+        Self { pos, radio, rot, partes }
     }
 }

@@ -20,12 +20,20 @@ impl Galaxia {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Progreso {
     estacion: bool,
+    nave_cafe_visitada: bool,
     completadas: [bool; 4],
     ruta: Option<Galaxia>,
     actual: Galaxia,
 }
 
 impl Progreso {
+    pub fn nave_cafe_visitada(&self) -> bool { self.nave_cafe_visitada }
+    pub fn observar_nave_cafe(&mut self, altura: f32, velocidad: f32, en_vuelo: bool) -> bool {
+        if self.actual != Galaxia::TauCeti || self.nave_cafe_visitada || !en_vuelo
+            || !(0.0..=6.0).contains(&altura) || !(0.0..=6.0).contains(&velocidad) { return false; }
+        self.nave_cafe_visitada = true;
+        true
+    }
     pub fn estacion_completada(&self) -> bool { self.estacion }
     pub fn completar_estacion(&mut self) { self.estacion = true; }
     pub fn marte_disponible(&self) -> bool { self.estacion }

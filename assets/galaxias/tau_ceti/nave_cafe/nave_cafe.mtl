@@ -1,0 +1,24 @@
+newmtl Casco_cafe
+Kd 0.58 0.4 0.22
+
+newmtl Casco_cafe_oscuro
+Kd 0.36 0.24 0.13
+
+newmtl Cobre
+Kd 0.74 0.4 0.16
+
+newmtl Dorado
+Kd 0.92 0.76 0.32
+
+newmtl Dorado_oscuro
+Kd 0.68 0.52 0.2
+
+newmtl Placa_cafe
+Kd 0.49 0.34 0.19
+
+newmtl Refuerzos_oscuros
+Kd 0.12 0.09 0.07
+
+newmtl Fondo_de_toberas
+Kd 1.0 0.66 0.26
+

@@ -64,7 +64,7 @@ impl Escena {
                 angulo: 0.0, shader: i, es_sol: false, nubes: None, angulo_nubes: 0.0, orbita, anillos });
         }
         Self { galaxia: Galaxia::Gargantua, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE,
-            cinturon: None, agujero_negro: Some(AgujeroNegro::nuevo()), estacion: None, mallas, shaders, cuerpos,
+            cinturon: None, agujero_negro: Some(AgujeroNegro::nuevo()), estacion: None, nave_cafe: None, mallas, shaders, cuerpos,
             asteroides: vec![], cols_ast: vec![], m_cuadrado, m_octaedro, m_muro, m_anillo_limite,
             m_borde_cinturon: vec![], s_asteroide, s_orbita, s_barrera, s_baliza, s_brillo }
     }

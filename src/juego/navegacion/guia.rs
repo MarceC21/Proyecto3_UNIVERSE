@@ -53,6 +53,13 @@ pub fn objetivo(escena: &Escena, progreso: &Progreso, nave: V3) -> Option<Objeti
         });
     }
     if escena.galaxia == Galaxia::TauCeti {
+        if !progreso.nave_cafe_visitada() {
+            return escena.nave_cafe.as_ref().map(|n| Objetivo {
+                nombre: "Blip-A",
+                indicacion: "Acercate despacio antes de visitar Adrien",
+                pos: n.pos,
+            });
+        }
         return cuerpo("Adrien").map(|pos| Objetivo {
             nombre: "ADRIEN",
             indicacion: "Explora Tau Ceti / M para elegir otra ruta",

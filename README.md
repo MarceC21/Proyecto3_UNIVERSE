@@ -320,7 +320,17 @@ Controles de vistas: **0** general, **1** estrella, **2** Adrien, **3** Gigante,
 **4** Ceti Nova, **5** Oceanus, **6** Saturn, **7** Ceti Nova II, **8** Veridia,
 **9** Aethel, **U** cinturón y **N** límite. WASD, turbo, modo local, cámara
 libre, **R** reaparición y **H** cabina funcionan como en los otros sistemas.
-La guía señala Adrien para explorar; su misión de superficie queda para después.
+**T** acerca la vista a la **Blip-A**, situada entre Adrien, Gigante y Oceanus.
+Su tamaño se triplicó respecto a la versión anterior: su dimensión mayor mide
+seis veces la de la nave predeterminada del jugador.
+Conserva el OBJ, sus colores café/cobre/dorado y las toberas ámbar. Tiene
+colisión y usa el mismo emisor y descarte por esfera que la estación.
+
+La guía señala primero Blip-A. Acércate a menos de **6 unidades de su
+superficie**, con velocidad **6 o menor**, para registrar la visita; después
+la flecha apunta a **Adrien**. La visita se conserva al viajar entre sistemas
+durante la sesión y se reinicia al cerrar el juego. Por ahora es un encuentro
+exterior; el atraque, su interior y la misión de Adrien quedan para después.
 Llegar a Tau Ceti no completa esa misión ni desbloquea Eridani.
 
 Para inspeccionarlo directamente (habilita los requisitos previos solo en esa ejecución):
@@ -343,6 +353,8 @@ cargo run --release --no-default-features --bin exportar_tau_ceti -- /tmp/tau-ce
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
 - `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
 - `src/galaxias/tau_ceti/`: tercer sistema, ocho texturas, estrella cian y skybox propio.
+- `src/galaxias/tau_ceti/nave_cafe.rs`: modelo de encuentro, posición y escala.
+- `assets/galaxias/tau_ceti/nave_cafe/`: OBJ, MTL y generador Python entregados.
 - `src/bin/exportar_tau_ceti.rs`: vistas del tercer sistema y de su llegada.
 - `src/galaxias/gargantua/miller/`: paisaje y controlador de la misión de superficie.
 - `src/juego/estados/miller.rs`: cajas, preguntas, estrategias, ola, reloj y resultados.

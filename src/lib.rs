@@ -98,3 +98,5 @@ pub mod generadores_tau_ceti;
 pub mod cielo_tau_ceti;
 #[path = "galaxias/tau_ceti/escena.rs"]
 pub mod tau_ceti;
+#[path = "galaxias/tau_ceti/nave_cafe.rs"]
+pub mod nave_cafe;
