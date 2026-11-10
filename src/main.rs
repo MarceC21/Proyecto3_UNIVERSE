@@ -30,6 +30,19 @@ fn resolucion(calidad: usize) -> (usize, usize) {
     match calidad { 1 => (960, 600), 2 => (720, 450), _ => (480, 300) }
 }
 
+fn cargar_sistema(galaxia: Galaxia) -> (Escena, Cielo, V3, V3) {
+    match galaxia {
+        Galaxia::Solar => {
+            let escena = Escena::nueva();
+            let (pos,obj) = nave_raster::guia::inicio_solar(&escena);
+            (escena,Cielo::nuevo(),pos,obj)
+        }
+        Galaxia::Gargantua => (Escena::gargantua(),Cielo::gargantua(),nave_raster::gargantua::INICIO,V3::ZERO),
+        Galaxia::TauCeti => (Escena::tau_ceti(),Cielo::tau_ceti(),nave_raster::tau_ceti::INICIO,V3::ZERO),
+        Galaxia::Eridani => unreachable!("Sistema todavia no disponible"),
+    }
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let mut ruta = None;
@@ -46,7 +59,8 @@ fn main() {
             galaxia_inicial = match args.next().as_deref() {
                 Some("gargantua") => Galaxia::Gargantua,
                 Some("solar") => Galaxia::Solar,
-                _ => { eprintln!("Usa --galaxia solar o --galaxia gargantua"); std::process::exit(1); }
+                Some("tau-ceti") | Some("tau_ceti") => Galaxia::TauCeti,
+                _ => { eprintln!("Usa --galaxia solar, gargantua o tau-ceti"); std::process::exit(1); }
             };
         } else if ruta.is_none() { ruta = Some(arg); }
         else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
@@ -63,17 +77,10 @@ fn main() {
     window.set_exit_key(None);
     window.disable_cursor();
 
-    println!("Generando texturas y sistema solar...");
-    let mut escena = if galaxia_inicial == Galaxia::Gargantua { Escena::gargantua() } else { Escena::nueva() };
-    let mut cielo = if galaxia_inicial == Galaxia::Gargantua { Cielo::gargantua() } else { Cielo::nuevo() };
-    if galaxia_inicial == Galaxia::Gargantua {
-        nave.establecer_reaparicion(nave_raster::gargantua::INICIO);
-        nave.reaparecer();
-    } else {
-        let (pos, objetivo) = nave_raster::guia::inicio_solar(&escena);
-        nave.establecer_reaparicion(pos);
-        nave.teletransportar(pos, objetivo);
-    }
+    println!("Generando texturas y {}...",galaxia_inicial.nombre());
+    let (mut escena, mut cielo, inicio, objetivo_inicial) = cargar_sistema(galaxia_inicial);
+    nave.establecer_reaparicion(inicio);
+    nave.teletransportar(inicio,objetivo_inicial);
 
     let mut calidad = 1usize;
     let (mut rw, mut rh) = resolucion(calidad);
@@ -91,11 +98,15 @@ fn main() {
     let mut terminal_marte = TerminalMarte::default();
     // Cada ejecución es una partida nueva; el avance vive solo en memoria.
     let mut progreso = Progreso::default();
-    if galaxia_inicial == Galaxia::Gargantua {
+    if galaxia_inicial != Galaxia::Solar {
         // Acceso de inspección; la partida normal conserva el desbloqueo de Marte.
         progreso.completar_estacion();
         progreso.completar_marte();
         progreso.viajar(Galaxia::Gargantua);
+        if galaxia_inicial == Galaxia::TauCeti {
+            progreso.completar(Galaxia::Gargantua);
+            progreso.viajar(Galaxia::TauCeti);
+        }
         mision_marte.marcar_completada();
     }
     let mut salto = Salto::default();
@@ -182,14 +193,13 @@ fn main() {
             if !cerrar && salto.listo() {
                 if let Some(solicitud) = salto.solicitud().filter(|s| s.destino.implementada()) {
                     if progreso.viajar(solicitud.destino) {
-                        let gargantua = solicitud.destino == Galaxia::Gargantua;
-                        escena = if gargantua { Escena::gargantua() } else { Escena::nueva() };
-                        cielo = if gargantua { Cielo::gargantua() } else { Cielo::nuevo() };
+                        let (nueva_escena,nuevo_cielo,inicio,objetivo) = cargar_sistema(solicitud.destino);
+                        escena = nueva_escena;
+                        cielo = nuevo_cielo;
                         vistas = escena.vistas();
-                        let inicio_solar = nave_raster::guia::inicio_solar;
-                        nave.establecer_reaparicion(if gargantua { nave_raster::gargantua::INICIO } else { inicio_solar(&escena).0 });
+                        nave.establecer_reaparicion(inicio);
                         nave.reaparecer();
-                        if !gargantua { let (pos,obj) = inicio_solar(&escena); nave.teletransportar(pos,obj); }
+                        nave.teletransportar(inicio,objetivo);
                         nave.modo_local = false;
                         seguimiento.reiniciar(nave.fwd, nave.up);
                         camara_libre = false;
@@ -257,12 +267,19 @@ fn main() {
                 (KeyboardKey::KEY_U, "urano"), (KeyboardKey::KEY_N, "neptuno"),
                 (KeyboardKey::KEY_SIX, "cinturon"), (KeyboardKey::KEY_SEVEN, "limite"),
                 (KeyboardKey::KEY_T, "estacion")]
-        } else {
+        } else if escena.galaxia == Galaxia::Gargantua {
             vec![(KeyboardKey::KEY_ZERO, "general"), (KeyboardKey::KEY_ONE, "gargantua"),
                 (KeyboardKey::KEY_TWO, "miller"), (KeyboardKey::KEY_THREE, "mann"),
                 (KeyboardKey::KEY_FOUR, "edmunds"), (KeyboardKey::KEY_FIVE, "thalos"),
                 (KeyboardKey::KEY_SIX, "nyx"), (KeyboardKey::KEY_SEVEN, "aurora"),
                 (KeyboardKey::KEY_EIGHT, "limite")]
+        } else {
+            vec![(KeyboardKey::KEY_ZERO,"general"),(KeyboardKey::KEY_ONE,"tau ceti"),
+                (KeyboardKey::KEY_TWO,"adrien"),(KeyboardKey::KEY_THREE,"gigante"),
+                (KeyboardKey::KEY_FOUR,"ceti nova"),(KeyboardKey::KEY_FIVE,"oceanus"),
+                (KeyboardKey::KEY_SIX,"saturn"),(KeyboardKey::KEY_SEVEN,"ceti nova ii"),
+                (KeyboardKey::KEY_EIGHT,"veridia"),(KeyboardKey::KEY_NINE,"aethel"),
+                (KeyboardKey::KEY_U,"cinturon"),(KeyboardKey::KEY_N,"limite")]
         };
         for (tecla, nombre) in teclas {
             if window.is_key_pressed(tecla) {
@@ -442,9 +459,12 @@ fn main() {
         if escena.galaxia == Galaxia::Solar {
             d.draw_text("0 general  1 Sol 2 Mercurio 3 Venus 4 Tierra 5 Marte 6 cinturon 7 limite", 16, 124, 14, Color::LIGHTGRAY);
             d.draw_text("8 Jupiter  9 Saturno  U Urano  N Neptuno  T Estacion  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
-        } else {
+        } else if escena.galaxia == Galaxia::Gargantua {
             d.draw_text("GARGANTUA: 0 general  1 centro  2 Miller  3 Mann  4 Edmunds  5 Thalos", 16, 124, 14, Color::LIGHTGRAY);
             d.draw_text("6 Nyx  7 Aurora  8 limite  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
+        } else {
+            d.draw_text("TAU CETI: 0 general  1 estrella  2 Adrien  3 Gigante  4 Ceti Nova  5 Oceanus",16,124,14,Color::LIGHTGRAY);
+            d.draw_text("6 Saturn  7 Ceti Nova II  8 Veridia  9 Aethel  U cinturon  N limite  M mapa",16,144,14,Color::LIGHTGRAY);
         }
 
         // Modo local (rodear un cuerpo).

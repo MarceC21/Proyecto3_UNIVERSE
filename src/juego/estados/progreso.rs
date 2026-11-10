@@ -14,7 +14,7 @@ impl Galaxia {
         match self { Self::Solar => "SISTEMA SOLAR", Self::Gargantua => "GARGANTUA",
             Self::TauCeti => "TAU CETI", Self::Eridani => "40 ERIDANI A" }
     }
-    pub fn implementada(self) -> bool { matches!(self, Self::Solar | Self::Gargantua) }
+    pub fn implementada(self) -> bool { matches!(self, Self::Solar | Self::Gargantua | Self::TauCeti) }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -37,8 +37,11 @@ impl Progreso {
     pub fn viajar(&mut self, destino: Galaxia) -> bool {
         if !self.motor_activo() || destino == self.actual || !destino.implementada() || !self.desbloqueada(destino) { return false; }
         self.actual = destino;
-        // Navegar no completa la misión de Miller ni revela Tau Ceti.
-        self.ruta = Some(if destino == Galaxia::Solar { Galaxia::Gargantua } else { Galaxia::Solar });
+        // Preferir el siguiente sistema abierto; si falta completar la misión
+        // actual, ofrecer el anterior. Viajar nunca completa una misión.
+        self.ruta = GALAXIAS.get(destino.indice()+1).copied()
+            .filter(|g| g.implementada() && self.desbloqueada(*g))
+            .or_else(|| destino.indice().checked_sub(1).map(|i| GALAXIAS[i]));
         true
     }
     pub fn desbloqueada(&self, g: Galaxia) -> bool {
@@ -67,6 +70,30 @@ impl Progreso {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn miller_habilita_salto_a_tau_ceti_y_permite_regresar_sin_revelar_eridani() {
+        let mut p = Progreso::default();
+        p.completar_estacion();
+        p.completar_marte();
+        p.viajar(Galaxia::Gargantua);
+        assert!(!p.viajar(Galaxia::TauCeti));
+        assert!(p.completar(Galaxia::Gargantua));
+        assert_eq!(p.ruta(),Some(Galaxia::TauCeti));
+        let mut salto = crate::salto::Salto::default();
+        assert!(salto.observar(&p,2.0,true));
+        salto.actualizar(2.1);
+        assert!(salto.listo());
+        assert_eq!(salto.solicitud().unwrap().destino,Galaxia::TauCeti);
+        assert!(p.viajar(Galaxia::TauCeti));
+        assert_eq!(p.ruta(),Some(Galaxia::Gargantua));
+        assert!(!p.completada(Galaxia::TauCeti));
+        assert!(!p.desbloqueada(Galaxia::Eridani));
+        assert!(p.viajar(Galaxia::Gargantua));
+        assert_eq!(p.ruta(),Some(Galaxia::TauCeti));
+        assert!(p.seleccionar_ruta(Galaxia::Solar));
+        assert!(p.viajar(Galaxia::Solar));
+        assert!(p.estacion_completada() && p.marte_completado());
+    }
     #[test]
     fn estacion_abre_marte_sin_adelantar_motor_y_el_reinicio_borra_todo() {
         let mut p = Progreso::default();

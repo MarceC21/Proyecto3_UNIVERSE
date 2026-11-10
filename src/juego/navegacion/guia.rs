@@ -52,6 +52,13 @@ pub fn objetivo(escena: &Escena, progreso: &Progreso, nave: V3) -> Option<Objeti
             pos,
         });
     }
+    if escena.galaxia == Galaxia::TauCeti {
+        return cuerpo("Adrien").map(|pos| Objetivo {
+            nombre: "ADRIEN",
+            indicacion: "Explora Tau Ceti / M para elegir otra ruta",
+            pos,
+        });
+    }
     let radial = v3(nave.x, 0.0, nave.z);
     let dir = if radial.len() > 0.01 {
         radial.norm()

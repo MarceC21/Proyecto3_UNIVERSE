@@ -145,8 +145,8 @@ los otros tres destinos son siluetas negras sin identidad. La carta indica que
 la terminal de Marte está pendiente y no permite trazar rutas bloqueadas.
 
 Completar Marte revela **Gargantua** y la selecciona como ruta inicial. Puedes
-seleccionar los destinos disponibles con clic o **1–4**. Tau Ceti y 40 Eridani A
-siguen ocultos; sus futuras misiones desbloquearán las siguientes rutas en orden.
+seleccionar los destinos disponibles con clic o **1–4**. Completar Miller en
+Gargantua revela **Tau Ceti** y traza esa ruta. 40 Eridani A sigue oculto.
 El mapa pausa el vuelo y se cierra con **M**, **X** o **Escape**.
 
 Con el motor desbloqueado y una ruta trazada, acercarse a **6 unidades del límite
@@ -157,9 +157,9 @@ Al completar los dos segundos de sincronización se carga **Gargantua** con su
 propio cielo, límites y punto de aparición. El mapa muestra la ubicación actual.
 Desde Gargantua puedes seleccionar el sistema solar y regresar llegando al borde.
 **X** o **Escape** permiten cancelar la sincronización y volver a una posición
-segura del sistema actual. Viajar no completa Miller ni desbloquea Tau Ceti.
-El motor permanece desbloqueado durante la sesión; no hay inventario ni consumo
-de combustible todavía.
+segura del sistema actual. Viajar no completa las misiones de los sistemas.
+El motor y las provisiones permanecen durante la sesión; todavía no se consume
+combustible para saltar.
 
 El juego no lee ni escribe archivos de partida. Cada ejecución comienza con
 Marte pendiente, motor y mapa bloqueados y sin ruta. Si existe un archivo antiguo
@@ -276,7 +276,7 @@ sin sumar esos segundos al reloj ni mostrarlos al jugador.
 Solo al finalizar se revela el tiempo exterior: **1 hora en Miller = 7 años**,
 equivalente a `segundos_locales * 7 * 365 / 3600` días. Hay finales de éxito,
 regreso tardío y derrota por la ola. Solo el éxito completa Gargantua y revela
-Tau Ceti en el mapa; ese sistema todavía no permite viajar. La misión exitosa
+Tau Ceti en el mapa y permite viajar allí desde el límite. La misión exitosa
 no se reabre al acercarse a Miller durante la misma partida. Todo el progreso
 se reinicia al cerrar el juego, como en Marte.
 
@@ -296,6 +296,45 @@ También guarda `miller_aproximacion.ppm`, `miller_descenso.ppm` y
 `ver_miller` conserva la vista previa visual entregada (flechas para mirar),
 mientras `--miller` abre el minijuego interactivo integrado.
 
+## Tau Ceti: tercer sistema navegable
+
+Después de completar Miller con éxito, la ruta a **Tau Ceti** queda seleccionada.
+Sigue la flecha hasta el límite de Gargantua: el motor sincroniza el salto y
+carga el nuevo sistema con su cielo, límites, colisiones y punto de llegada.
+También puedes trazar la ruta con **M → 3 / Tau Ceti**. Desde Tau Ceti, el mapa
+permite volver a Gargantua o al sistema solar; conserva los progresos de la sesión.
+
+La estrella es **azul-cian**, de radio 12, con superficie y resplandor animados.
+Hay ocho planetas: **Adrien** (verde y naranja, radio 7), **Gigante** (bandas
+azules y tormenta, radio 9), **Ceti Nova**, **Oceanus**, **Saturn** (pequeño y
+morado, con anillos), **Ceti Nova II**, **Veridia** y **Aethel**. Cada uno tiene
+su textura horneada; el cielo usa nebulosas verdes, violetas y azules.
+
+El cinturón de **1 400 asteroides** está entre los radios **400 y 436**, después
+del último planeta. El límite es **470**, con altura **70**. La nave llega a
+`(0, 8, 350)`, dentro del cinturón, en una zona libre de colisiones. Se reutilizan
+las mallas LOD, el culling y los shaders del motor. Los planetas rotan sobre su
+eje; sus posiciones orbitales permanecen fijas.
+
+Controles de vistas: **0** general, **1** estrella, **2** Adrien, **3** Gigante,
+**4** Ceti Nova, **5** Oceanus, **6** Saturn, **7** Ceti Nova II, **8** Veridia,
+**9** Aethel, **U** cinturón y **N** límite. WASD, turbo, modo local, cámara
+libre, **R** reaparición y **H** cabina funcionan como en los otros sistemas.
+La guía señala Adrien para explorar; su misión de superficie queda para después.
+Llegar a Tau Ceti no completa esa misión ni desbloquea Eridani.
+
+Para inspeccionarlo directamente (habilita los requisitos previos solo en esa ejecución):
+
+```bash
+cargo run --release -- --galaxia tau-ceti
+```
+
+Para generar vistas con el renderer, sin ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_tau_ceti -- /tmp/tau-ceti
+```
+
 ## Organización
 
 - `src/motor/`: cámara genérica, cielo, matemáticas, geometría, texturas y renderizado.
@@ -303,6 +342,8 @@ mientras `--miller` abre el minijuego interactivo integrado.
 - `src/juego/navegacion/seguimiento.rs`: cámara de seguimiento de la nave.
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
 - `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
+- `src/galaxias/tau_ceti/`: tercer sistema, ocho texturas, estrella cian y skybox propio.
+- `src/bin/exportar_tau_ceti.rs`: vistas del tercer sistema y de su llegada.
 - `src/galaxias/gargantua/miller/`: paisaje y controlador de la misión de superficie.
 - `src/juego/estados/miller.rs`: cajas, preguntas, estrategias, ola, reloj y resultados.
 - `src/motor/fisica/gravedad.rs`: campo de atracción independiente de raylib.

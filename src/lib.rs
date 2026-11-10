@@ -91,3 +91,10 @@ pub mod aventura;
 pub mod interfaz_interior;
 #[path = "juego/navegacion/guia.rs"]
 pub mod guia;
+
+#[path = "galaxias/tau_ceti/generadores.rs"]
+pub mod generadores_tau_ceti;
+#[path = "galaxias/tau_ceti/cielo.rs"]
+pub mod cielo_tau_ceti;
+#[path = "galaxias/tau_ceti/escena.rs"]
+pub mod tau_ceti;

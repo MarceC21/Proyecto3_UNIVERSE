@@ -36,11 +36,11 @@ pub struct Cuerpo {
 }
 
 pub(crate) struct Asteroide {
-    pos: V3,
-    rot: Rot,
-    escala: f32,
-    tipo: usize,
-    tinte: V3,
+    pub(crate) pos: V3,
+    pub(crate) rot: Rot,
+    pub(crate) escala: f32,
+    pub(crate) tipo: usize,
+    pub(crate) tinte: V3,
 }
 
 pub struct Escena {
@@ -211,7 +211,7 @@ impl Escena {
         let mut v = vec![("general".to_string(), v3(0.0, self.alto_limite - 5.0, self.radio_limite * 0.9), V3::ZERO)];
         for c in &self.cuerpos {
             let mut cam = Camara::nueva(100.0, 100.0);
-            let encuadre = if self.galaxia == Galaxia::Gargantua {
+            let encuadre = if self.galaxia != Galaxia::Solar {
                 c.anillos.iter().map(|(m, _)| self.mallas[*m].radio * 0.6).fold(1.0, f32::max)
             } else { 1.0 };
             cam.vista_esfera(c.pos, c.radio * encuadre, self.pos_sol());
@@ -222,8 +222,9 @@ impl Escena {
             let (f, _, _) = cam.base();
             v.push((c.nombre.to_lowercase(), cam.pos, cam.pos + f));
         }
-        if self.cinturon.is_some() {
-            v.push(("cinturon".to_string(), v3(95.0, 6.0, 40.0), v3(118.0, 0.0, -30.0)));
+        if let Some((interior, exterior)) = self.cinturon {
+            let radio = (interior+exterior)*0.5;
+            v.push(("cinturon".to_string(), v3(radio-25.0, 6.0, 40.0), v3(radio-2.0, 0.0, -30.0)));
         }
         v.push(("limite".to_string(), v3(self.radio_limite - 20.0, 4.0, 0.0), v3(self.radio_limite, 0.0, 0.0)));
         if let Some(estacion) = &self.estacion {
