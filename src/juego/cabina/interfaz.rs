@@ -184,6 +184,9 @@ impl VisorInterior {
         l.rect(20.0, 20.0, 820.0, 115.0, panel);
         l.texto(
             match hud.fase {
+                Fase::TunelBlip => "BLIP-A - PASILLO DE ENCUENTRO",
+                Fase::Atraque if a.en_blip_a() => "BLIP-A - MANIOBRA DE ATRAQUE",
+                Fase::Nave if a.en_blip_a() => "CABINA - ATRACADOS EN BLIP-A",
                 Fase::Atraque => "ESTACION - MANIOBRA DE ATRAQUE",
                 Fase::Estacion => "ESTACION - RECUPERAR PROVISIONES",
                 _ => "NAVE - SISTEMAS Y PROVISIONES",

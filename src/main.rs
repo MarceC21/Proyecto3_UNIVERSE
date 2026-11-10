@@ -6,7 +6,7 @@ use nave_raster::{
     dibujo::Ajustes,
     escena::Escena,
     math::{v3, V3},
-    nave::{Control, Mundo, Nave},
+    nave::{Mundo, Nave},
     raster::Framebuffer,
     render::dibujar_con_nave as dibujar,
 };
@@ -48,9 +48,12 @@ fn main() {
     let mut ruta = None;
     let mut galaxia_inicial = Galaxia::Solar;
     let mut iniciar_miller = false;
+    let mut iniciar_adrian = false;
     let mut iniciar_estacion = false;
     while let Some(arg) = args.next() {
-        if arg == "--estacion" {
+        if arg == "--adrian" || arg == "--adrien" {
+            iniciar_adrian = true;
+        } else if arg == "--estacion" {
             iniciar_estacion = true;
         } else if arg == "--miller" {
             iniciar_miller = true;
@@ -66,7 +69,8 @@ fn main() {
         else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
     }
     if iniciar_miller { galaxia_inicial = Galaxia::Gargantua; }
-    if iniciar_estacion { galaxia_inicial = Galaxia::Solar; iniciar_miller = false; }
+    if iniciar_adrian { galaxia_inicial = Galaxia::TauCeti; iniciar_miller = false; }
+    if iniciar_estacion { galaxia_inicial = Galaxia::Solar; iniciar_miller = false; iniciar_adrian = false; }
     let mut nave = match ruta.as_deref() {
         Some(ruta) => Nave::cargar(ruta),
         None => Nave::predeterminada(),
@@ -117,6 +121,13 @@ fn main() {
     if iniciar_miller { miller.entrar(); }
     let mut aventura: Option<Aventura> = None;
     let mut visor_interior = nave_raster::interfaz_interior::VisorInterior::default();
+    let mut blip_armada = true;
+    let mut operacion_adrian = nave_raster::interfaz_adrian::OperacionAdrian::default();
+    let mut adrian_armado = true;
+    if iniciar_adrian {
+        progreso.completar_encuentro_blip();
+        operacion_adrian.entrar(&nave);
+    }
     if iniciar_estacion {
         let est = escena.estacion.as_ref().expect("falta estacion");
         let pos = est.pos + v3(0.0, 3.0, 10.0);
@@ -132,6 +143,7 @@ fn main() {
 
         if let Some(a) = aventura.as_mut().filter(|a| a.activa()) {
             let evento = visor_interior.cuadro(&mut window, &thread, a, &mut nave, &escena, &cielo, &aj, dt);
+            if a.encuentro_blip_realizado() { progreso.completar_encuentro_blip(); }
             if evento == EventoInterior::Desacoplar {
                 if a.completada() { progreso.completar_estacion(); }
                 let (pos, objetivo) = a.pose_desacople();
@@ -158,6 +170,17 @@ fn main() {
                 nave.modo_local = false;
                 seguimiento.reiniciar(nave.fwd, nave.up);
                 miller_armado = false;
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            }
+            continue;
+        }
+
+        if operacion_adrian.activa {
+            let salir = operacion_adrian.cuadro(&mut window,&thread,&nave);
+            if operacion_adrian.exitosa() { progreso.completar(Galaxia::TauCeti); }
+            if salir {
+                adrian_armado = false;
+                seguimiento.reiniciar(nave.fwd,nave.up);
                 if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
             }
             continue;
@@ -323,16 +346,8 @@ fn main() {
             };
             cam.actualizar(&entrada, dt, &cuerpos, escena.radio_limite, escena.alto_limite);
         } else {
-            let control = Control {
-                empuje: eje(KeyboardKey::KEY_W, KeyboardKey::KEY_S, &window),
-                lateral: eje(KeyboardKey::KEY_D, KeyboardKey::KEY_A, &window),
-                vertical: eje(KeyboardKey::KEY_SPACE, KeyboardKey::KEY_LEFT_CONTROL, &window),
-                cabeceo: eje(KeyboardKey::KEY_UP, KeyboardKey::KEY_DOWN, &window),
-                guinada: eje(KeyboardKey::KEY_RIGHT, KeyboardKey::KEY_LEFT, &window),
-                alabeo: eje(KeyboardKey::KEY_E, KeyboardKey::KEY_Q, &window),
-                raton: if orbitando { (0.0, 0.0) } else { (raton.x, raton.y) },
-                turbo: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
-            };
+            let control = nave_raster::entrada_nave::leer(&window,
+                if orbitando { (0.0,0.0) } else { (raton.x,raton.y) });
             let mundo = Mundo {
                 cuerpos: &cuerpos,
                 asteroides: escena.colisionadores_asteroides(),
@@ -361,9 +376,18 @@ fn main() {
                 }
             }
         }
-        let en_vuelo = !camara_libre && nave.destruida <= 0.0 && !aventura.as_ref().is_some_and(|a| a.activa());
+        let mut en_vuelo = !camara_libre && nave.destruida <= 0.0 && !aventura.as_ref().is_some_and(|a| a.activa());
         if let Some(n) = &escena.nave_cafe {
-            progreso.observar_nave_cafe((nave.pos-n.pos).len()-n.radio,nave.velocidad(),en_vuelo);
+            let altura = (nave.pos-n.pos).len()-n.radio;
+            if altura > 10.0 { blip_armada = true; }
+            if blip_armada && en_vuelo && progreso.estacion_completada()
+                && (0.0..=6.0).contains(&altura) && nave.velocidad() <= 6.0 {
+                aventura.get_or_insert_with(Aventura::nueva).iniciar_atraque_blip(nave.pos,nave.fwd,n.pos,n.radio,n.rot);
+                blip_armada = false;
+                nave.vel = V3::ZERO;
+                nave.modo_local = false;
+                en_vuelo = false;
+            }
         }
         if mision_marte.observar(altura_marte, nave.velocidad(), en_vuelo && progreso.marte_disponible()) {
             nave.vel = V3::ZERO;
@@ -378,6 +402,16 @@ fn main() {
             miller_armado = false;
             nave.vel = V3::ZERO;
             window.disable_cursor();
+        }
+        let altura_adrian = escena.cuerpos.iter().find(|c| c.nombre == "Adrien")
+            .map(|c| (nave.pos-c.pos).len()-c.radio).unwrap_or(f32::INFINITY);
+        if altura_adrian > 10.0 { adrian_armado = true; }
+        if escena.galaxia == Galaxia::TauCeti && en_vuelo && adrian_armado
+            && progreso.adrien_disponible() && !progreso.completada(Galaxia::TauCeti)
+            && (0.0..=6.5).contains(&altura_adrian) && nave.velocidad() <= 6.0 {
+            operacion_adrian.entrar(&nave);
+            adrian_armado = false;
+            en_vuelo = false;
         }
         let distancia_borde_nave = escena.radio_limite - (nave.pos.x * nave.pos.x + nave.pos.z * nave.pos.z).sqrt();
         if salto.observar(&progreso, distancia_borde_nave,
@@ -444,8 +478,8 @@ fn main() {
                     (ox+sx*escala) as i32-55,(oy+sy*escala) as i32-16,17,Color::new(255,200,117,255));
             }
             if !camara_libre && (nave.pos-n.pos).len()-n.radio < 15.0 {
-                d.draw_text(if progreso.nave_cafe_visitada() { "Blip-A VISITADA / SIGUIENTE DESTINO: ADRIEN" }
-                    else { "Blip-A: acercate a menos de 6 y baja la velocidad a 6" },
+                d.draw_text(if progreso.nave_cafe_visitada() { "Blip-A: encuentro completado / SIGUIENTE DESTINO: ADRIEN" }
+                    else { "Blip-A: acercate a menos de 6 y baja a 6 para atracar" },
                     16,sh as i32-112,17,Color::new(255,200,117,255));
             }
         }
@@ -514,6 +548,11 @@ fn main() {
         if !camara_libre && altura_miller < 24.0 && !progreso.completada(Galaxia::Gargantua) {
             d.draw_text("MILLER: acercate a menos de 6.5 y reduce la velocidad a 6 para aterrizar",
                 16, sh as i32 - 88, 17, Color::new(130, 230, 240, 255));
+        }
+        if !camara_libre && altura_adrian < 24.0 && !progreso.completada(Galaxia::TauCeti) {
+            d.draw_text(if progreso.adrien_disponible() { "ADRIEN: acercate a menos de 6.5 y baja a 6 para iniciar OPERACION TAUMOEBA" }
+                else { "ADRIEN: completa primero el encuentro del cristal en Blip-A" },
+                16,sh as i32-88,17,Color::new(123,245,158,255));
         }
         if progreso.motor_activo() {
             d.draw_text("MOTOR LISTO / [M] MAPA INTERESTELAR", sw as i32 - 400, sh as i32 - 30,

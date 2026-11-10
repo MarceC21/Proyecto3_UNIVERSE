@@ -17,6 +17,7 @@ use crate::nave_interior::{self, Puntos, FIN_ESCLUSA, FIN_TUNEL};
 use crate::raster::Framebuffer;
 use crate::render::dibujar;
 use crate::tars::Tars;
+use crate::tunel_blip_a::{TunelBlipA, Z_CRISTAL};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -25,6 +26,7 @@ pub enum Fase {
     Atraque,
     Nave,
     Estacion,
+    TunelBlip,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -39,6 +41,13 @@ enum Destino {
     NaveInicial,
     AEstacion,
     ANave,
+    ATunelBlip,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Muelle {
+    Estacion,
+    BlipA,
 }
 
 struct Fundido {
@@ -122,6 +131,10 @@ pub struct Aventura {
     crucero: bool,
     est_pos: V3,
     est_rot: Rot,
+    muelle: Muelle,
+    tunel_blip: Option<TunelBlipA>,
+    encuentro_blip: bool,
+    mundo_blip: Mundo,
 }
 
 fn parte_caja(s: V3, mat: Mat, luces: Arc<Vec<Luz>>, amb: V3) -> Parte {
@@ -188,6 +201,18 @@ impl Aventura {
             crucero: false,
             est_pos: V3::ZERO,
             est_rot: Rot::identidad(),
+            muelle: Muelle::Estacion,
+            tunel_blip: None,
+            encuentro_blip: false,
+            mundo_blip: Mundo {
+                zonas: vec![Zona::Rect {
+                    x0: -1.24,
+                    x1: 1.24,
+                    z0: Z_CRISTAL + 0.35,
+                    z1: -0.1,
+                }],
+                ..Default::default()
+            },
         }
     }
 
@@ -200,18 +225,28 @@ impl Aventura {
     pub fn en_crucero(&self) -> bool {
         self.crucero
     }
+    pub fn en_blip_a(&self) -> bool {
+        !self.crucero && self.muelle == Muelle::BlipA
+    }
+    pub fn encuentro_blip_realizado(&self) -> bool {
+        self.encuentro_blip
+    }
 
-    pub fn entrar_cabina(&mut self, pos: V3, fwd: V3, up: V3, estacion_completada: bool) -> bool {
-        if !estacion_completada || self.activa() {
-            return false;
-        }
-        // Los accesos de inspección de Gargantua también tienen los sistemas activos.
+    fn restaurar_sistemas(&mut self) {
         if !self.sistemas_activos {
             self.inv.instalados = Material::TODOS.to_vec();
             self.inv.mochila.clear();
             self.recogido = [true; 5];
             self.sistemas_activos = true;
         }
+    }
+
+    pub fn entrar_cabina(&mut self, pos: V3, fwd: V3, up: V3, estacion_completada: bool) -> bool {
+        if !estacion_completada || self.activa() {
+            return false;
+        }
+        // Los accesos de inspección de Gargantua también tienen los sistemas activos.
+        self.restaurar_sistemas();
         self.crucero = true;
         self.nave_pos = pos;
         self.nave_fwd = fwd;
@@ -222,6 +257,7 @@ impl Aventura {
         self.escotilla = 0.0;
         self.fase = Fase::Nave;
         self.jugador.colocar(0.0, 4.8, 0.0);
+        self.jugador.altura_ojos = 1.65;
         self.mensaje("Cabina en crucero. H o consola de pilotaje para volver a conducir.");
         true
     }
@@ -272,10 +308,29 @@ impl Aventura {
         self.nave_fwd = -dir;
         self.nave_up = v3(0.0, 1.0, 0.0);
         self.crucero = false;
+        self.muelle = Muelle::Estacion;
         self.est_pos = est_pos;
         self.est_rot = est_rot;
         self.fase = Fase::Atraque;
         self.fundido = None;
+    }
+
+    pub fn iniciar_atraque_blip(
+        &mut self,
+        nave_pos: V3,
+        nave_fwd: V3,
+        blip_pos: V3,
+        radio: f32,
+        rot: Rot,
+    ) {
+        self.restaurar_sistemas();
+        self.iniciar_atraque(nave_pos, nave_fwd, blip_pos, radio, rot);
+        self.muelle = Muelle::BlipA;
+        self.escotilla_abierta = false;
+        self.escotilla = 0.0;
+        if self.tunel_blip.is_none() {
+            self.tunel_blip = Some(TunelBlipA::nuevo());
+        }
     }
 
     // Pose de la nave (posición, hacia dónde mira) durante la maniobra de atraque.
@@ -387,7 +442,12 @@ impl Aventura {
                 if !self.crucero && self.escotilla > 0.9 && jz > FIN_TUNEL - 1.8 && jz < FIN_TUNEL {
                     v.push(Candidato {
                         dist: 0.1,
-                        texto: "Salir a la estación".into(),
+                        texto: if self.en_blip_a() {
+                            "Entrar al pasillo de Blip-A"
+                        } else {
+                            "Salir a la estación"
+                        }
+                        .into(),
                         accion: Some(Accion::SalirAEstacion),
                     });
                 }
@@ -414,6 +474,13 @@ impl Aventura {
                         accion: Some(Accion::VolverANave),
                     });
                 }
+            }
+            Fase::TunelBlip if jz > -2.2 => {
+                v.push(Candidato {
+                    dist: 0.0,
+                    texto: "Volver a la cabina".into(),
+                    accion: Some(Accion::VolverANave),
+                });
             }
             _ => {}
         }
@@ -475,7 +542,11 @@ impl Aventura {
                 self.fundido = Some(Fundido {
                     t: 0.0,
                     dur: 1.6,
-                    destino: Destino::AEstacion,
+                    destino: if self.en_blip_a() {
+                        Destino::ATunelBlip
+                    } else {
+                        Destino::AEstacion
+                    },
                     hecho: false,
                 })
             }
@@ -499,6 +570,7 @@ impl Aventura {
     }
 
     fn aplicar(&mut self, d: Destino) {
+        self.jugador.altura_ojos = 1.65;
         match d {
             Destino::NaveInicial => {
                 self.fase = Fase::Nave;
@@ -512,6 +584,12 @@ impl Aventura {
             Destino::ANave => {
                 self.fase = Fase::Nave;
                 self.jugador.colocar(0.0, FIN_TUNEL - 1.5, 0.0);
+            }
+            Destino::ATunelBlip => {
+                self.fase = Fase::TunelBlip;
+                self.jugador.colocar(0.0, -1.0, 0.0);
+                self.jugador.altura_ojos = 1.79;
+                self.mensaje("Recorre el pasillo hasta el cristal hexagonal.");
             }
         }
     }
@@ -530,6 +608,12 @@ impl Aventura {
             self.mensaje = None;
         }
 
+        let entrada_bloqueada = EntradaAventura::default();
+        let ent = if self.fundido.is_some() {
+            &entrada_bloqueada
+        } else {
+            ent
+        };
         let mut aplicar = None;
         if let Some(f) = &mut self.fundido {
             f.t += dt;
@@ -565,12 +649,24 @@ impl Aventura {
             Fase::Estacion => {
                 self.jugador.actualizar(&ent.j, dt, &self.estacion.mundo);
             }
+            Fase::TunelBlip => {
+                self.jugador.actualizar(&ent.j, dt, &self.mundo_blip);
+                if !self.encuentro_blip
+                    && self.fundido.is_none()
+                    && self.jugador.z <= Z_CRISTAL + 1.6
+                {
+                    self.encuentro_blip = true;
+                    self.mensaje(
+                        "PUNTO DE ENCUENTRO ALCANZADO. Regresa a la nave y continua hacia Adrien.",
+                    );
+                }
+            }
             Fase::Inactiva => {}
         }
 
         if ent.interactuar
             && self.fundido.is_none()
-            && matches!(self.fase, Fase::Nave | Fase::Estacion)
+            && matches!(self.fase, Fase::Nave | Fase::Estacion | Fase::TunelBlip)
         {
             if let Some(Candidato {
                 accion: Some(a), ..
@@ -619,6 +715,15 @@ impl Aventura {
 
     // ------------------------------------------------------------------ dibujo
     pub fn dibujar(&self, fb: &mut Framebuffer, escena: &Escena, cielo: &Cielo, aj: &Ajustes) {
+        if self.fase == Fase::TunelBlip {
+            let mut cam = Camara::nueva(fb.width as f32, fb.height as f32);
+            self.jugador.camara(&mut cam);
+            self.tunel_blip
+                .as_ref()
+                .expect("tunel de atraque")
+                .dibujar(fb, &cam, self.tiempo);
+            return;
+        }
         if !matches!(self.fase, Fase::Nave | Fase::Estacion) {
             return;
         }
@@ -708,7 +813,21 @@ impl Aventura {
 
     // --------------------------------------------------------------------- HUD
     pub fn hud(&self) -> Hud {
-        let objetivo = if self.crucero {
+        let objetivo = if self.fase == Fase::TunelBlip {
+            if self.encuentro_blip {
+                "Encuentro alcanzado: vuelve a la cabina y parte hacia Adrien"
+            } else {
+                "Recorre el pasillo hasta el cristal hexagonal"
+            }
+            .to_string()
+        } else if self.en_blip_a() {
+            if self.encuentro_blip {
+                "Ve a la consola de pilotaje para partir hacia Adrien"
+            } else {
+                "Ve a la esclusa trasera, abre la escotilla y entra al pasillo de Blip-A"
+            }
+            .to_string()
+        } else if self.crucero {
             "Cabina en crucero: H o consola de pilotaje para volver a conducir".to_string()
         } else if self.sistemas_activos {
             "Sistemas en línea: ve a la consola de pilotaje (frente de la cabina) y desacopla"
@@ -766,6 +885,123 @@ impl Aventura {
 #[cfg(test)]
 mod pruebas {
     use super::*;
+    #[test]
+    fn blip_requiere_recorrer_el_pasillo_hasta_el_cristal_y_permite_volver() {
+        use crate::{
+            guia,
+            progreso::{Galaxia, Progreso},
+        };
+        let escena = Escena::tau_ceti();
+        let blip = escena.nave_cafe.as_ref().unwrap();
+        let mut p = Progreso::default();
+        p.completar_estacion();
+        p.completar_marte();
+        p.viajar(Galaxia::Gargantua);
+        p.completar(Galaxia::Gargantua);
+        p.viajar(Galaxia::TauCeti);
+        let mut a = Aventura::nueva();
+        a.iniciar_atraque_blip(
+            blip.pos + v3(0.0, 0.0, blip.radio + 5.0),
+            v3(0.0, 0.0, -1.0),
+            blip.pos,
+            blip.radio,
+            blip.rot,
+        );
+        avanzar(&mut a, 6.0);
+        assert_eq!(a.fase, Fase::Nave);
+        assert!(a.en_blip_a() && !a.encuentro_blip_realizado());
+        assert_eq!(
+            guia::objetivo(&escena, &p, blip.pos).unwrap().nombre,
+            "Blip-A"
+        );
+        a.jugador.colocar(a.pts.esclusa.x, a.pts.esclusa.z, 0.0);
+        interactuar(&mut a);
+        avanzar(&mut a, 2.0);
+        assert!(a.escotilla > 0.9);
+        a.jugador.colocar(0.0, FIN_TUNEL - 1.0, 0.0);
+        assert_eq!(a.candidato().unwrap().texto, "Entrar al pasillo de Blip-A");
+        interactuar(&mut a);
+        avanzar(&mut a, 2.0);
+        assert_eq!(a.fase, Fase::TunelBlip);
+        assert!(!a.encuentro_blip_realizado());
+        let adelante = EntradaAventura {
+            j: EntradaJ {
+                adelante: 1.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for _ in 0..300 {
+            a.actualizar(&adelante, 1.0 / 30.0);
+            assert!(
+                a.jugador.z >= Z_CRISTAL + 0.35 + RADIO - 0.01,
+                "atraveso el cristal"
+            );
+        }
+        assert!(a.encuentro_blip_realizado());
+        assert!(a.jugador.z <= Z_CRISTAL + 1.6);
+        assert!(p.completar_encuentro_blip());
+        assert!(!p.completar_encuentro_blip());
+        assert_eq!(
+            guia::objetivo(&escena, &p, blip.pos).unwrap().nombre,
+            "ADRIEN"
+        );
+        let lateral = EntradaAventura {
+            j: EntradaJ {
+                lateral: 1.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for _ in 0..90 {
+            a.actualizar(&lateral, 1.0 / 30.0);
+        }
+        assert!(a.jugador.x <= 1.24 - RADIO + 0.01, "salio de la pasarela");
+        let atras = EntradaAventura {
+            j: EntradaJ {
+                adelante: -1.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for _ in 0..300 {
+            a.actualizar(&atras, 1.0 / 30.0);
+        }
+        assert_eq!(a.candidato().unwrap().texto, "Volver a la cabina");
+        interactuar(&mut a);
+        avanzar(&mut a, 2.0);
+        assert_eq!(a.fase, Fase::Nave);
+        assert_eq!(a.jugador.altura_ojos, 1.65);
+        assert!(a.encuentro_blip_realizado() && a.inv.sistemas_listos());
+        a.jugador.colocar(a.pts.pilotaje.x, a.pts.pilotaje.z, 0.0);
+        assert_eq!(interactuar(&mut a), Evento::Desacoplar);
+    }
+
+    #[test]
+    fn salir_antes_del_cristal_no_completa_el_encuentro() {
+        let mut a = Aventura::nueva();
+        a.iniciar_atraque_blip(
+            v3(0.0, 0.0, 20.0),
+            v3(0.0, 0.0, -1.0),
+            V3::ZERO,
+            5.0,
+            Rot::identidad(),
+        );
+        avanzar(&mut a, 6.0);
+        a.aplicar(Destino::ATunelBlip);
+        avanzar(&mut a, 1.0);
+        a.suspender();
+        assert!(!a.encuentro_blip_realizado());
+        a.iniciar_atraque_blip(
+            v3(0.0, 0.0, 20.0),
+            v3(0.0, 0.0, -1.0),
+            V3::ZERO,
+            5.0,
+            Rot::identidad(),
+        );
+        avanzar(&mut a, 6.0);
+        assert!(!a.encuentro_blip_realizado());
+    }
     #[test]
     fn cabina_en_crucero_requiere_estacion_y_no_regresa_a_un_muelle_antiguo() {
         let mut a = Aventura::nueva();

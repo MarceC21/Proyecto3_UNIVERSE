@@ -161,6 +161,16 @@ impl Nave {
 
     pub fn velocidad(&self) -> f32 { self.vel.len() }
 
+    // Consulta sin respuesta física: permite recoger muestras o contar impactos
+    // usando las mismas cinco esferas que las colisiones de vuelo.
+    pub fn toca_esfera(&self, centro: V3, radio: f32) -> bool {
+        let der = self.derecha();
+        ESFERAS.iter().any(|(o,r)| {
+            let p = self.pos + der*(o.x*ESCALA_NAVE) + self.up*(o.y*ESCALA_NAVE) + self.fwd*(o.z*ESCALA_NAVE);
+            (p-centro).len() <= radio+r*ESCALA_NAVE
+        })
+    }
+
     // Coloca la nave en un punto mirando a un objetivo (para los atajos 1..7).
     pub fn teletransportar(&mut self, pos: V3, objetivo: V3) {
         self.pos = pos;

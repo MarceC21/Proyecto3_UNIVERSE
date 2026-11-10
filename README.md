@@ -326,12 +326,34 @@ seis veces la de la nave predeterminada del jugador.
 Conserva el OBJ, sus colores café/cobre/dorado y las toberas ámbar. Tiene
 colisión y usa el mismo emisor y descarte por esfera que la estación.
 
-La guía señala primero Blip-A. Acércate a menos de **6 unidades de su
-superficie**, con velocidad **6 o menor**, para registrar la visita; después
-la flecha apunta a **Adrien**. La visita se conserva al viajar entre sistemas
-durante la sesión y se reinicia al cerrar el juego. Por ahora es un encuentro
-exterior; el atraque, su interior y la misión de Adrien quedan para después.
+La guía señala primero **Blip-A**. Acércate a menos de **6 unidades de su
+superficie**, con velocidad **6 o menor**: el atraque comienza automáticamente
+y hace la transición al interior de tu nave. La cámara libre no activa el atraque.
+
+1. Recorre la cabina hasta la esclusa trasera y usa **E** en el panel para abrir
+   la escotilla, como en la estación espacial.
+2. Recorre la esclusa y pulsa **E** en el extremo: **Entrar al pasillo de Blip-A**.
+3. Camina con **WASD** por el túnel oscuro hasta el **cristal hexagonal**. La
+   pasarela y el vidrio tienen límites de colisión. El espacio al otro lado
+   permanece vacío para incorporar después al nuevo personaje.
+4. Al llegar al cristal se registra el **punto de encuentro** y se habilita
+   el destino **Adrien**. Aproximarse a Blip-A o entrar a la cabina no lo completa.
+5. Regresa al inicio del pasillo y usa **E** para volver a la cabina. Puedes
+   desacoplar desde la consola de pilotaje o volver al vuelo con **X/Esc**.
+
+Salir antes del cristal mantiene Blip-A como objetivo y permite volver a intentarlo.
+El encuentro completado se conserva al viajar entre sistemas durante la sesión
+y se reinicia al cerrar el juego. Al regresar a Blip-A se puede recorrer el túnel
+de nuevo. El personaje y su diálogo quedan para la siguiente etapa; por ahora
+basta con alcanzar el cristal para habilitar la operación de Adrien.
 Llegar a Tau Ceti no completa esa misión ni desbloquea Eridani.
+
+El túnel forma parte del proyecto en `src/juego/cabina/tunel_blip_a.rs`; se retiró
+la entrega visual separada. Para exportar sus vistas sin ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_tunel_blip_a -- /tmp/tunel-blip-a
+```
 
 Para inspeccionarlo directamente (habilita los requisitos previos solo en esa ejecución):
 
@@ -345,6 +367,59 @@ Para generar vistas con el renderer, sin ventana:
 cargo run --release --no-default-features --bin exportar_tau_ceti -- /tmp/tau-ceti
 ```
 
+## Adrien: Operación Taumoeba
+
+Después del encuentro en el cristal de Blip-A, acércate a **Adrien** a una
+altura de **6.5 o menos**, con velocidad **6 o menor**, usando la nave real.
+Se activa la transición de cinco segundos de la **Línea Petrova**: nebulosa,
+franjas y partículas rojas animadas. Es una representación artística. Después
+aparecen las instrucciones; **Comenzar / Enter** inicia los **90 segundos**.
+La cámara libre no activa la misión y una operación activa no se abre otra vez.
+
+- **A/D** y **Espacio/Ctrl** conservan el desplazamiento lateral y vertical de
+  la nave. Durante la recolección se estabiliza la orientación y se limita el
+  movimiento al área visible. No hay que perseguir objetos: aparecen delante
+  y avanzan hacia la nave.
+- Recoge **8 muestras**: núcleo verde, membrana irregular cian transparente y
+  halo luminoso. Las rocas tienen forma asimétrica y reutilizan los generadores,
+  semillas y LOD del cinturón de asteroides.
+- La integridad de la misión empieza en **3/3**. Cada impacto consume una unidad;
+  un segundo de invulnerabilidad evita daño repetido. El obstáculo se elimina.
+- Al completar la recolección se retiran los objetos y aparece un **anillo de
+  extracción**. Alinea la nave y usa **W/S** para atravesarlo antes de agotar el
+  tiempo. Recolectar las ocho muestras no basta para ganar.
+- **P** pausa la misión: reloj, objetos y partículas se detienen. **X/Esc**
+  permite salir en cualquier momento. Desde el resultado, **R** o el botón de
+  reinicio limpia las muestras, integridad, objetos, efectos y nave temporal.
+- Hay victoria, derrota por daños y derrota por tiempo. La victoria completa
+  Tau Ceti y revela la siguiente ruta en el mapa; Eridani todavía no tiene escena.
+
+La simulación usa una instancia temporal de **`Nave::actualizar`**, con las
+mismas aceleración, amortiguación y cinco esferas de colisión. La traducción
+de controles se comparte con el vuelo normal en `navegacion/entrada.rs`.
+La nave exterior permanece intacta; al salir se recuperan su posición,
+orientación, velocidad, integridad y navegación. No se reemplaza su integrador
+ni se crea otro bucle principal. Los objetos y el reloj usan delta time con
+subpasos; el máximo de objetos activos es configurable.
+
+Los valores de diseño están en `Configuracion::default()` de
+`src/juego/estados/adrian.rs`: 8 muestras, 90 s, aproximación a 12 unidades/s,
+apariciones cada 1–1.5 s, 60% de muestras y máximo de 24 objetos. Las primeras
+dos muestras aparecen centradas; después se distribuyen mediante una caminata
+aleatoria alcanzable, evitando rocas superpuestas a muestras recién aparecidas.
+
+Acceso directo de inspección (habilita los requisitos previos solo en esa ejecución):
+
+```bash
+cargo run --release -- --adrian
+```
+
+Vistas sin ventana de la introducción, muestras, obstáculos y extracción:
+
+```bash
+cargo run --release --no-default-features --bin exportar_adrian -- /tmp/adrian
+```
+
 ## Organización
 
 - `src/motor/`: cámara genérica, cielo, matemáticas, geometría, texturas y renderizado.
@@ -353,6 +428,8 @@ cargo run --release --no-default-features --bin exportar_tau_ceti -- /tmp/tau-ce
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
 - `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
 - `src/galaxias/tau_ceti/`: tercer sistema, ocho texturas, estrella cian y skybox propio.
+- `src/galaxias/tau_ceti/adrian/`: visuales e interfaz de Operación Taumoeba.
+- `src/juego/estados/adrian.rs`: fases, objetos, cronómetro, impactos y extracción.
 - `src/galaxias/tau_ceti/nave_cafe.rs`: modelo de encuentro, posición y escala.
 - `assets/galaxias/tau_ceti/nave_cafe/`: OBJ, MTL y generador Python entregados.
 - `src/bin/exportar_tau_ceti.rs`: vistas del tercer sistema y de su llegada.

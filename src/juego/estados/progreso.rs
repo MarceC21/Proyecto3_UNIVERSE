@@ -28,9 +28,10 @@ pub struct Progreso {
 
 impl Progreso {
     pub fn nave_cafe_visitada(&self) -> bool { self.nave_cafe_visitada }
-    pub fn observar_nave_cafe(&mut self, altura: f32, velocidad: f32, en_vuelo: bool) -> bool {
-        if self.actual != Galaxia::TauCeti || self.nave_cafe_visitada || !en_vuelo
-            || !(0.0..=6.0).contains(&altura) || !(0.0..=6.0).contains(&velocidad) { return false; }
+    pub fn adrien_disponible(&self) -> bool { self.nave_cafe_visitada }
+    // Solo la aventura llama aquí después de llegar al cristal del pasillo.
+    pub fn completar_encuentro_blip(&mut self) -> bool {
+        if self.actual != Galaxia::TauCeti || self.nave_cafe_visitada { return false; }
         self.nave_cafe_visitada = true;
         true
     }

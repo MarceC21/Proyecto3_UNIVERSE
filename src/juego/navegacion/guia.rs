@@ -52,17 +52,17 @@ pub fn objetivo(escena: &Escena, progreso: &Progreso, nave: V3) -> Option<Objeti
             pos,
         });
     }
-    if escena.galaxia == Galaxia::TauCeti {
-        if !progreso.nave_cafe_visitada() {
+    if escena.galaxia == Galaxia::TauCeti && !progreso.completada(Galaxia::TauCeti) {
+        if !progreso.adrien_disponible() {
             return escena.nave_cafe.as_ref().map(|n| Objetivo {
                 nombre: "Blip-A",
-                indicacion: "Acercate despacio antes de visitar Adrien",
+                indicacion: "Atraca y recorre el pasillo hasta el cristal",
                 pos: n.pos,
             });
         }
         return cuerpo("Adrien").map(|pos| Objetivo {
             nombre: "ADRIEN",
-            indicacion: "Explora Tau Ceti / M para elegir otra ruta",
+            indicacion: "Acercate despacio / Operacion Taumoeba",
             pos,
         });
     }

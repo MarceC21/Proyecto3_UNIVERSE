@@ -126,10 +126,8 @@ mod tests {
         p.completar(Galaxia::Gargantua);
         p.viajar(Galaxia::TauCeti);
         assert_eq!(guia::objetivo(&e, &p, n.pos).unwrap().nombre, "Blip-A");
-        assert!(!p.observar_nave_cafe(4.0, 0.0, false));
-        assert!(!p.observar_nave_cafe(20.0, 0.0, true));
-        assert!(!p.observar_nave_cafe(4.0, 10.0, true));
-        assert!(p.observar_nave_cafe(4.0, 2.0, true));
+        assert!(!p.nave_cafe_visitada()); // la proximidad exterior no completa el encuentro
+        assert!(p.completar_encuentro_blip());
         assert_eq!(guia::objetivo(&e, &p, n.pos).unwrap().nombre, "ADRIEN");
         p.viajar(Galaxia::Gargantua);
         p.viajar(Galaxia::TauCeti);

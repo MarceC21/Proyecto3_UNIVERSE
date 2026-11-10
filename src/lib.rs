@@ -100,3 +100,16 @@ pub mod cielo_tau_ceti;
 pub mod tau_ceti;
 #[path = "galaxias/tau_ceti/nave_cafe.rs"]
 pub mod nave_cafe;
+#[path = "juego/cabina/tunel_blip_a.rs"]
+pub mod tunel_blip_a;
+
+#[cfg(feature = "ventana")]
+#[path = "juego/navegacion/entrada.rs"]
+pub mod entrada_nave;
+#[path = "juego/estados/adrian.rs"]
+pub mod mision_adrian;
+#[path = "galaxias/tau_ceti/adrian/escena.rs"]
+pub mod escena_adrian;
+#[cfg(feature = "ventana")]
+#[path = "galaxias/tau_ceti/adrian/interfaz.rs"]
+pub mod interfaz_adrian;
