@@ -69,6 +69,10 @@ fn main() {
     if galaxia_inicial == Galaxia::Gargantua {
         nave.establecer_reaparicion(nave_raster::gargantua::INICIO);
         nave.reaparecer();
+    } else {
+        let (pos, objetivo) = nave_raster::guia::inicio_solar(&escena);
+        nave.establecer_reaparicion(pos);
+        nave.teletransportar(pos, objetivo);
     }
 
     let mut calidad = 1usize;
@@ -123,6 +127,9 @@ fn main() {
                 nave.teletransportar(pos, objetivo);
                 nave.modo_local = false;
                 seguimiento.reiniciar(nave.fwd, nave.up);
+                if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
+            } else if evento == EventoInterior::VolverAlVuelo {
+                seguimiento.reiniciar(nave.fwd,nave.up);
                 if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
             }
             continue;
@@ -179,8 +186,10 @@ fn main() {
                         escena = if gargantua { Escena::gargantua() } else { Escena::nueva() };
                         cielo = if gargantua { Cielo::gargantua() } else { Cielo::nuevo() };
                         vistas = escena.vistas();
-                        nave.establecer_reaparicion(if gargantua { nave_raster::gargantua::INICIO } else { nave_raster::nave::INICIO });
+                        let inicio_solar = nave_raster::guia::inicio_solar;
+                        nave.establecer_reaparicion(if gargantua { nave_raster::gargantua::INICIO } else { inicio_solar(&escena).0 });
                         nave.reaparecer();
+                        if !gargantua { let (pos,obj) = inicio_solar(&escena); nave.teletransportar(pos,obj); }
                         nave.modo_local = false;
                         seguimiento.reiniciar(nave.fwd, nave.up);
                         camara_libre = false;
@@ -216,7 +225,14 @@ fn main() {
         if window.is_key_pressed(KeyboardKey::KEY_O) { aj.orbitas = !aj.orbitas; }
         if window.is_key_pressed(KeyboardKey::KEY_B) { aj.limite = !aj.limite; }
         if window.is_key_pressed(KeyboardKey::KEY_F) { nave.modo_local = !nave.modo_local; }
-        if window.is_key_pressed(KeyboardKey::KEY_R) { nave.reaparecer(); seguimiento.reiniciar(nave.fwd, nave.up); }
+        if window.is_key_pressed(KeyboardKey::KEY_R) {
+            nave.reaparecer();
+            if escena.galaxia == Galaxia::Solar {
+                let (_,obj) = nave_raster::guia::inicio_solar(&escena);
+                nave.teletransportar(nave.pos,obj);
+            }
+            seguimiento.reiniciar(nave.fwd, nave.up);
+        }
         if window.is_key_pressed(KeyboardKey::KEY_TAB) {
             mouse = !mouse;
             if mouse { window.disable_cursor(); } else { window.enable_cursor(); }
@@ -314,6 +330,10 @@ fn main() {
 
         let altura_marte = escena.cuerpos.iter().find(|c| c.nombre == "Marte")
             .map(|c| (nave.pos - c.pos).len() - c.radio).unwrap_or(f32::INFINITY);
+        if window.is_key_pressed(KeyboardKey::KEY_H) && progreso.estacion_completada()
+            && !camara_libre && nave.destruida <= 0.0 {
+            aventura.get_or_insert_with(Aventura::nueva).entrar_cabina(nave.pos,nave.fwd,nave.up,true);
+        }
         if window.is_key_pressed(KeyboardKey::KEY_E) && !camara_libre && nave.destruida <= 0.0 {
             if let Some(est) = &escena.estacion {
                 if Aventura::puede_atracar(nave.pos,nave.velocidad(),est.pos,est.radio,true) {
@@ -332,7 +352,7 @@ fn main() {
             .map(|c| (nave.pos - c.pos).len() - c.radio).unwrap_or(f32::INFINITY);
         if altura_miller > 10.0 { miller_armado = true; }
         if escena.galaxia == Galaxia::Gargantua && miller_armado && !progreso.completada(Galaxia::Gargantua)
-            && !camara_libre && nave.destruida <= 0.0 && (0.0..=6.5).contains(&altura_miller) && nave.velocidad() <= 6.0 {
+            && en_vuelo && (0.0..=6.5).contains(&altura_miller) && nave.velocidad() <= 6.0 {
             miller.entrar();
             miller_armado = false;
             nave.vel = V3::ZERO;
@@ -372,6 +392,11 @@ fn main() {
         d.clear_background(Color::BLACK);
         d.draw_texture_pro(&*tex, Rectangle::new(0.0, 0.0, rw as f32, rh as f32),
             Rectangle::new(ox, oy, dw, dh), Vector2::zero(), 0.0, Color::WHITE);
+        if !camara_libre {
+            if let Some(objetivo) = nave_raster::guia::objetivo(&escena,&progreso,nave.pos) {
+                nave_raster::guia::dibujar(&mut d,&cam,&objetivo,nave.pos,(ox,oy,dw,dh));
+            }
+        }
 
         // Etiquetas de los cuerpos proyectadas a pantalla.
         for c in &escena.cuerpos {
@@ -458,6 +483,9 @@ fn main() {
         if progreso.motor_activo() {
             d.draw_text("MOTOR LISTO / [M] MAPA INTERESTELAR", sw as i32 - 400, sh as i32 - 30,
                 17, Color::new(131, 239, 163, 255));
+        }
+        if progreso.estacion_completada() && !camara_libre {
+            d.draw_text("[H] ENTRAR A LA CABINA",sw as i32-315,sh as i32-56,17,Color::new(111,232,239,255));
         }
 
         if let Some(agujero) = &escena.agujero_negro {

@@ -20,6 +20,12 @@ cargo run --release -- /ruta/a/nave.obj
 El vuelo, la escala, las cinco esferas de colisión y las posiciones de los
 motores están configurados para el modelo incluido.
 
+La partida comienza cerca de la **Tierra**, mirando hacia la estación espacial.
+La flecha dorada y el panel de objetivo guían el recorrido: **estación → Marte
+→ límite para saltar → Miller → siguiente límite**. El objetivo cambia con
+el progreso; si está fuera de vista, la flecha se mantiene en el borde y señala
+el giro. El marcador indica también la distancia y si el destino está detrás.
+
 ## Controles
 
 | Entrada | Acción |
@@ -43,6 +49,7 @@ motores están configurados para el modelo incluido.
 | 8 / 9 / U / N | Júpiter / Saturno / Urano / Neptuno |
 | T | Estación junto a la Tierra |
 | M | Mapa interestelar; M, X o Escape para cerrarlo |
+| H | Entrar a la cabina después de completar la estación; H, X/Esc o consola de pilotaje para volver al vuelo |
 
 Los atajos trasladan la nave en modo seguimiento y la cámara en modo libre.
 Las colisiones de la nave con planetas y asteroides usan subpasos, rebote,
@@ -81,6 +88,13 @@ En el inventario, `-` indica pendiente, `*` en mochila y `+` instalado.
 **X/Esc** vuelve al vuelo y conserva los materiales durante la sesión para
 retomar el recorrido. Salir antes de activar los sistemas deja Marte bloqueado.
 Todo el progreso se reinicia al cerrar el juego.
+
+Después de completar la estación, **H** permite recorrer el interior de la nave
+desde cualquier lugar de ambos sistemas. El vuelo queda pausado durante la
+visita: al salir se conservan posición, orientación y velocidad. Las ventanas
+corresponden al lugar actual; TARS y el inventario siguen disponibles. La
+escotilla permanece bloqueada en crucero: el recorrido hacia la estación
+requiere atracar de nuevo con **E**.
 
 La cabina, el planetario, los monitores, la esclusa, el interior de la estación
 y TARS reutilizan los módulos y el OBJ entregados. La geometría y los shaders

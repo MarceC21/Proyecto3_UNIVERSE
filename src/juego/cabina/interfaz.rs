@@ -88,7 +88,8 @@ impl VisorInterior {
         dt: f32,
     ) -> Evento {
         let salir = window.is_key_pressed(KeyboardKey::KEY_X)
-            || window.is_key_pressed(KeyboardKey::KEY_ESCAPE);
+            || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
+            || (a.en_crucero() && window.is_key_pressed(KeyboardKey::KEY_H));
         if window.is_key_pressed(KeyboardKey::KEY_TAB) {
             self.mouse = !self.mouse;
         }
@@ -128,7 +129,10 @@ impl VisorInterior {
             interactuar: window.is_key_pressed(KeyboardKey::KEY_E),
         };
         let evento = a.actualizar(&ent, dt);
-        if a.fase == Fase::Atraque || evento == Evento::Desacoplar {
+        if a.fase == Fase::Atraque
+            || evento == Evento::Desacoplar
+            || evento == Evento::VolverAlVuelo
+        {
             if let Some((pos, fwd)) = a.pose_atraque() {
                 nave.teletransportar(pos, pos + fwd);
             }
@@ -305,8 +309,13 @@ impl VisorInterior {
         );
         drop(d); // EndDrawing consume teclado incluso al salir de la escena.
         if salir {
+            let crucero = a.en_crucero();
             a.suspender();
-            return Evento::Desacoplar;
+            return if crucero {
+                Evento::VolverAlVuelo
+            } else {
+                Evento::Desacoplar
+            };
         }
         evento
     }

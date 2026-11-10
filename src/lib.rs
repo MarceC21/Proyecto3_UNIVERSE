@@ -89,3 +89,5 @@ pub mod aventura;
 #[cfg(feature = "ventana")]
 #[path = "juego/cabina/interfaz.rs"]
 pub mod interfaz_interior;
+#[path = "juego/navegacion/guia.rs"]
+pub mod guia;

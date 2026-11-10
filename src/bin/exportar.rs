@@ -53,8 +53,9 @@ fn main() {
     let ast = escena.colisionadores_asteroides().to_vec();
     let mundo = Mundo { cuerpos: &cuerpos, asteroides: &ast, radio_limite: RADIO_LIMITE, alto_limite: ALTO_LIMITE, gravedad: None, cinturon: Some((CINTURON_INT, CINTURON_EXT)) };
     let tierra = escena.cuerpos.iter().find(|c| c.nombre == "Tierra").unwrap();
+    let (inicio, objetivo_inicial) = nave_raster::guia::inicio_solar(&escena);
     let escenarios: Vec<(&str, V3, V3, f32)> = vec![
-        ("nave_inicio", nave_raster::nave::INICIO, nave_raster::nave::INICIO + v3(0.0, -0.05, -1.0), 0.0),
+        ("nave_inicio", inicio, objetivo_inicial, 0.0),
         ("nave_tierra", tierra.pos + (escena.pos_sol() - tierra.pos).norm() * 16.0 + v3(6.0, 2.0, 0.0), tierra.pos, 0.0),
         ("nave_estacion", escena.estacion.as_ref().unwrap().pos + v3(0.0, 4.0, 12.0), escena.estacion.as_ref().unwrap().pos, 0.0),
         ("nave_neptuno", escena.cuerpos[8].pos + (escena.pos_sol() - escena.cuerpos[8].pos).norm() * 24.0, escena.cuerpos[8].pos, 0.0),

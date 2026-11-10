@@ -31,6 +31,7 @@ pub enum Fase {
 pub enum Evento {
     Ninguno,
     Desacoplar,
+    VolverAlVuelo,
 }
 
 #[derive(Clone, Copy)]
@@ -117,6 +118,8 @@ pub struct Aventura {
     tiempo: f32,
     nave_pos: V3,
     nave_fwd: V3,
+    nave_up: V3,
+    crucero: bool,
     est_pos: V3,
     est_rot: Rot,
 }
@@ -181,6 +184,8 @@ impl Aventura {
             tiempo: 0.0,
             nave_pos: V3::ZERO,
             nave_fwd: v3(0.0, 0.0, -1.0),
+            nave_up: v3(0.0, 1.0, 0.0),
+            crucero: false,
             est_pos: V3::ZERO,
             est_rot: Rot::identidad(),
         }
@@ -191,6 +196,34 @@ impl Aventura {
     }
     pub fn completada(&self) -> bool {
         self.sistemas_activos
+    }
+    pub fn en_crucero(&self) -> bool {
+        self.crucero
+    }
+
+    pub fn entrar_cabina(&mut self, pos: V3, fwd: V3, up: V3, estacion_completada: bool) -> bool {
+        if !estacion_completada || self.activa() {
+            return false;
+        }
+        // Los accesos de inspección de Gargantua también tienen los sistemas activos.
+        if !self.sistemas_activos {
+            self.inv.instalados = Material::TODOS.to_vec();
+            self.inv.mochila.clear();
+            self.recogido = [true; 5];
+            self.sistemas_activos = true;
+        }
+        self.crucero = true;
+        self.nave_pos = pos;
+        self.nave_fwd = fwd;
+        self.nave_up = up;
+        self.atraque = None;
+        self.fundido = None;
+        self.escotilla_abierta = false;
+        self.escotilla = 0.0;
+        self.fase = Fase::Nave;
+        self.jugador.colocar(0.0, 4.8, 0.0);
+        self.mensaje("Cabina en crucero. H o consola de pilotaje para volver a conducir.");
+        true
     }
 
     // Salida manual: conserva lo recogido para poder retomar el recorrido.
@@ -237,6 +270,8 @@ impl Aventura {
         });
         self.nave_pos = hasta;
         self.nave_fwd = -dir;
+        self.nave_up = v3(0.0, 1.0, 0.0);
+        self.crucero = false;
         self.est_pos = est_pos;
         self.est_rot = est_rot;
         self.fase = Fase::Atraque;
@@ -311,7 +346,12 @@ impl Aventura {
                     v.push(if self.sistemas_activos {
                         Candidato {
                             dist: d,
-                            texto: "Desacoplar y partir".into(),
+                            texto: if self.crucero {
+                                "Volver al pilotaje"
+                            } else {
+                                "Desacoplar y partir"
+                            }
+                            .into(),
                             accion: Some(Accion::Pilotaje),
                         }
                     } else {
@@ -325,18 +365,26 @@ impl Aventura {
                 }
                 let d = dxz(jx, jz, self.pts.esclusa);
                 if d < 1.8 {
-                    let t = if self.escotilla_abierta {
-                        "Cerrar escotilla"
+                    if self.crucero {
+                        v.push(Candidato {
+                            dist: d,
+                            texto: "Escotilla bloqueada: requiere atraque".into(),
+                            accion: None,
+                        });
                     } else {
-                        "Abrir escotilla"
-                    };
-                    v.push(Candidato {
-                        dist: d,
-                        texto: t.into(),
-                        accion: Some(Accion::Escotilla),
-                    });
+                        let t = if self.escotilla_abierta {
+                            "Cerrar escotilla"
+                        } else {
+                            "Abrir escotilla"
+                        };
+                        v.push(Candidato {
+                            dist: d,
+                            texto: t.into(),
+                            accion: Some(Accion::Escotilla),
+                        });
+                    }
                 }
-                if self.escotilla > 0.9 && jz > FIN_TUNEL - 1.8 && jz < FIN_TUNEL {
+                if !self.crucero && self.escotilla > 0.9 && jz > FIN_TUNEL - 1.8 && jz < FIN_TUNEL {
                     v.push(Candidato {
                         dist: 0.1,
                         texto: "Salir a la estación".into(),
@@ -414,7 +462,11 @@ impl Aventura {
             }
             Accion::Pilotaje => {
                 self.fase = Fase::Inactiva;
-                return Evento::Desacoplar;
+                return if self.crucero {
+                    Evento::VolverAlVuelo
+                } else {
+                    Evento::Desacoplar
+                };
             }
             Accion::Escotilla => {
                 self.escotilla_abierta = !self.escotilla_abierta;
@@ -579,7 +631,9 @@ impl Aventura {
         let mut items: Vec<Item> = vec![];
         if self.fase == Fase::Nave {
             let fwd = self.nave_fwd;
-            let up0 = if fwd.y.abs() > 0.98 {
+            let up0 = if self.nave_up.cross(fwd).len() > 0.001 {
+                self.nave_up
+            } else if fwd.y.abs() > 0.98 {
                 v3(0.0, 0.0, -1.0)
             } else {
                 v3(0.0, 1.0, 0.0)
@@ -654,7 +708,9 @@ impl Aventura {
 
     // --------------------------------------------------------------------- HUD
     pub fn hud(&self) -> Hud {
-        let objetivo = if self.sistemas_activos {
+        let objetivo = if self.crucero {
+            "Cabina en crucero: H o consola de pilotaje para volver a conducir".to_string()
+        } else if self.sistemas_activos {
             "Sistemas en línea: ve a la consola de pilotaje (frente de la cabina) y desacopla"
                 .to_string()
         } else if self.fase == Fase::Estacion {
@@ -710,6 +766,29 @@ impl Aventura {
 #[cfg(test)]
 mod pruebas {
     use super::*;
+    #[test]
+    fn cabina_en_crucero_requiere_estacion_y_no_regresa_a_un_muelle_antiguo() {
+        let mut a = Aventura::nueva();
+        assert!(!a.entrar_cabina(V3::ZERO, v3(0.0, 0.0, -1.0), v3(0.0, 1.0, 0.0), false));
+        for pos in [v3(60.0, 2.0, 90.0), crate::gargantua::INICIO] {
+            let fwd = v3(1.0, 0.0, 0.0);
+            let up = v3(0.0, 0.7, 0.7).norm();
+            assert!(a.entrar_cabina(pos, fwd, up, true));
+            assert!(a.en_crucero() && a.pose_atraque().is_none());
+            assert!(a.inv.sistemas_listos());
+            assert_eq!(a.nave_pos, pos);
+            assert_eq!(a.nave_up, up);
+            a.jugador.colocar(a.pts.esclusa.x, a.pts.esclusa.z, 0.0);
+            assert!(a.candidato().unwrap().texto.contains("bloqueada"));
+            interactuar(&mut a);
+            avanzar(&mut a, 2.0);
+            assert_eq!(a.escotilla, 0.0);
+            a.jugador.colocar(a.pts.pilotaje.x, a.pts.pilotaje.z, 0.0);
+            assert_eq!(interactuar(&mut a), Evento::VolverAlVuelo);
+            assert_eq!(a.nave_pos, pos);
+            assert!(!a.activa());
+        }
+    }
     #[test]
     fn atracar_requiere_nave_real_cerca_y_lenta_y_salir_conserva_materiales() {
         let escena = Escena::nueva();
