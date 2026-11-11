@@ -6,6 +6,7 @@ use crate::cielo::Cielo;
 use crate::construccion::Geo;
 use crate::dibujo::{Ajustes, Item};
 use crate::dibujo_interior::*;
+use crate::encuentro_rocky::{EncuentroRocky, Etapa, Linea, RADIO_ROCKY};
 use crate::escena::Escena;
 use crate::estacion_interior::{self, PuntosEstacion};
 use crate::inventario::{Inventario, Material};
@@ -16,6 +17,7 @@ use crate::math::*;
 use crate::nave_interior::{self, Puntos, FIN_ESCLUSA, FIN_TUNEL};
 use crate::raster::Framebuffer;
 use crate::render::dibujar;
+use crate::rocky::Rocky;
 use crate::tars::Tars;
 use crate::tunel_blip_a::{TunelBlipA, Z_CRISTAL};
 use std::sync::Arc;
@@ -74,6 +76,8 @@ pub struct EntradaAventura {
 
 pub struct Hud {
     pub fase: Fase,
+    pub dialogo: Option<Linea>,
+    pub comentario: Option<Linea>,
     pub prompt: Option<String>,
     pub mensaje: Option<String>,
     pub objetivo: String,
@@ -134,6 +138,8 @@ pub struct Aventura {
     muelle: Muelle,
     tunel_blip: Option<TunelBlipA>,
     encuentro_blip: bool,
+    rocky: Rocky,
+    pub encuentro_rocky: EncuentroRocky,
     mundo_blip: Mundo,
 }
 
@@ -158,6 +164,14 @@ impl Aventura {
         let (estacion, pe) = estacion_interior::construir();
         let tars = Tars::nuevo(cabina.luces.clone(), cabina.ambiente);
         let (l, a) = (cabina.luces.clone(), cabina.ambiente);
+        let mut luces_rocky = (*l).clone();
+        luces_rocky.push(Luz {
+            pos: v3(0.0, 3.8, -26.0),
+            color: v3(1.0, 0.83, 0.63),
+            inten: 1.3,
+            radio: 9.0,
+        });
+        let rocky = Rocky::nuevo(Arc::new(luces_rocky), a);
         let vacias = Arc::new(vec![]);
         let esfera = |mat: Mat, luces: Arc<Vec<Luz>>| Parte {
             malla: malla::esfera(18, 12),
@@ -204,6 +218,8 @@ impl Aventura {
             muelle: Muelle::Estacion,
             tunel_blip: None,
             encuentro_blip: false,
+            rocky,
+            encuentro_rocky: EncuentroRocky::default(),
             mundo_blip: Mundo {
                 zonas: vec![Zona::Rect {
                     x0: -1.24,
@@ -358,6 +374,9 @@ impl Aventura {
 
     // ----------------------------------------------------------- interacciones
     fn candidato(&self) -> Option<Candidato> {
+        if self.encuentro_rocky.bloquea() {
+            return None;
+        }
         let (jx, jz) = (self.jugador.x, self.jugador.z);
         let mut v: Vec<Candidato> = vec![];
         match self.fase {
@@ -478,8 +497,21 @@ impl Aventura {
             Fase::TunelBlip if jz > -2.2 => {
                 v.push(Candidato {
                     dist: 0.0,
-                    texto: "Volver a la cabina".into(),
-                    accion: Some(Accion::VolverANave),
+                    texto: if self.encuentro_rocky.etapa == Etapa::Guiando
+                        && !self.encuentro_rocky.en_muelle()
+                    {
+                        "Espera a Rocky junto a la escotilla"
+                    } else {
+                        "Volver a la cabina"
+                    }
+                    .into(),
+                    accion: if self.encuentro_rocky.etapa == Etapa::Guiando
+                        && !self.encuentro_rocky.en_muelle()
+                    {
+                        None
+                    } else {
+                        Some(Accion::VolverANave)
+                    },
                 });
             }
             _ => {}
@@ -536,6 +568,9 @@ impl Aventura {
                 };
             }
             Accion::Escotilla => {
+                if self.encuentro_rocky.etapa == Etapa::Guiando && self.encuentro_rocky.en_nave {
+                    return Evento::Ninguno;
+                }
                 self.escotilla_abierta = !self.escotilla_abierta;
             }
             Accion::SalirAEstacion => {
@@ -582,6 +617,7 @@ impl Aventura {
                 self.jugador.colocar(x, z, y);
             }
             Destino::ANave => {
+                self.encuentro_rocky.abordar(FIN_TUNEL);
                 self.fase = Fase::Nave;
                 self.jugador.colocar(0.0, FIN_TUNEL - 1.5, 0.0);
             }
@@ -597,6 +633,16 @@ impl Aventura {
     // ------------------------------------------------------------- actualización
     pub fn actualizar(&mut self, ent: &EntradaAventura, dt: f32) -> Evento {
         if self.fase == Fase::Inactiva || !dt.is_finite() || dt <= 0.0 {
+            return Evento::Ninguno;
+        }
+        if self.encuentro_rocky.bloquea() {
+            // Consumir E/Enter aquí evita que la última línea accione también una consola.
+            if ent.interactuar {
+                if let Some(m) = self.encuentro_rocky.avanzar() {
+                    self.mensaje(m);
+                }
+                self.encuentro_blip = self.encuentro_rocky.completo();
+            }
             return Evento::Ninguno;
         }
         self.tiempo += dt;
@@ -650,21 +696,39 @@ impl Aventura {
                 self.jugador.actualizar(&ent.j, dt, &self.estacion.mundo);
             }
             Fase::TunelBlip => {
+                self.mundo_blip.dinamicos = if !self.encuentro_rocky.en_nave {
+                    vec![Obst::caja(
+                        self.encuentro_rocky.pos.x,
+                        self.encuentro_rocky.pos.z,
+                        RADIO_ROCKY * 2.0,
+                        RADIO_ROCKY * 2.0,
+                    )]
+                } else {
+                    vec![]
+                };
                 self.jugador.actualizar(&ent.j, dt, &self.mundo_blip);
-                if !self.encuentro_blip
-                    && self.fundido.is_none()
-                    && self.jugador.z <= Z_CRISTAL + 1.6
-                {
-                    self.encuentro_blip = true;
-                    self.mensaje(
-                        "PUNTO DE ENCUENTRO ALCANZADO. Regresa a la nave y continua hacia Adrien.",
-                    );
+                self.mundo_blip.dinamicos.clear();
+                self.encuentro_rocky.actualizar(
+                    dt,
+                    &self.mundo_blip,
+                    self.jugador.x,
+                    self.jugador.z,
+                    false,
+                );
+                if self.encuentro_rocky.apertura >= 1.0 {
+                    self.mundo_blip.zonas = vec![Zona::Rect {
+                        x0: -1.24,
+                        x1: 1.24,
+                        z0: -31.0,
+                        z1: -0.1,
+                    }];
                 }
             }
             Fase::Inactiva => {}
         }
 
         if ent.interactuar
+            && !self.encuentro_rocky.bloquea()
             && self.fundido.is_none()
             && matches!(self.fase, Fase::Nave | Fase::Estacion | Fase::TunelBlip)
         {
@@ -710,6 +774,16 @@ impl Aventura {
         self.tars
             .actualizar(dt, &self.cabina.mundo, jx, jz, self.hablando > 0.0);
         self.cabina.mundo.dinamicos.push(self.tars.obstaculo());
+        if self.encuentro_rocky.en_nave {
+            self.encuentro_rocky
+                .actualizar(dt, &self.cabina.mundo, jx, jz, true);
+            self.cabina.mundo.dinamicos.push(Obst::caja(
+                self.encuentro_rocky.pos.x,
+                self.encuentro_rocky.pos.z,
+                RADIO_ROCKY * 2.0,
+                RADIO_ROCKY * 2.0,
+            ));
+        }
         self.jugador.actualizar(&ent.j, dt, &self.cabina.mundo);
     }
 
@@ -721,7 +795,17 @@ impl Aventura {
             self.tunel_blip
                 .as_ref()
                 .expect("tunel de atraque")
-                .dibujar(fb, &cam, self.tiempo);
+                .dibujar_encuentro(
+                    fb,
+                    &cam,
+                    self.tiempo,
+                    if !self.encuentro_rocky.en_nave {
+                        self.rocky.items(&self.encuentro_rocky, self.tiempo)
+                    } else {
+                        vec![]
+                    },
+                    self.encuentro_rocky.apertura,
+                );
             return;
         }
         if !matches!(self.fase, Fase::Nave | Fase::Estacion) {
@@ -790,6 +874,9 @@ impl Aventura {
                 ));
             }
             items.extend(self.tars.items());
+            if self.encuentro_rocky.en_nave {
+                items.extend(self.rocky.items(&self.encuentro_rocky, self.tiempo));
+            }
         } else {
             let r_est = self.est_rot;
             ext.base_ext = Some((r_est.aplicar(f), r_est.aplicar(r), r_est.aplicar(u)));
@@ -813,7 +900,20 @@ impl Aventura {
 
     // --------------------------------------------------------------------- HUD
     pub fn hud(&self) -> Hud {
-        let objetivo = if self.fase == Fase::TunelBlip {
+        let objetivo = if self.encuentro_rocky.bloquea() {
+            "Habla con Rocky: E / Enter para continuar".to_string()
+        } else if self.encuentro_rocky.etapa == Etapa::Guiando
+            && (self.fase == Fase::TunelBlip || self.encuentro_rocky.en_nave)
+        {
+            if self.encuentro_rocky.esperando {
+                "Rocky te espera: acercate para continuar"
+            } else if self.encuentro_rocky.en_muelle() {
+                "Rocky espera junto a la escotilla: vuelve a la cabina con E"
+            } else {
+                "SIGUE A ROCKY hacia la cabina. Deja libre un lado si necesita pasar."
+            }
+            .to_string()
+        } else if self.fase == Fase::TunelBlip {
             if self.encuentro_blip {
                 "Encuentro alcanzado: vuelve a la cabina y parte hacia Adrien"
             } else {
@@ -855,6 +955,8 @@ impl Aventura {
             .collect();
         Hud {
             fase: self.fase,
+            dialogo: self.encuentro_rocky.dialogo(),
+            comentario: self.encuentro_rocky.comentario(),
             prompt: self.candidato().map(|c| c.texto),
             mensaje: self.mensaje.as_ref().map(|m| m.0.clone()),
             objetivo,
@@ -938,43 +1040,82 @@ mod pruebas {
                 "atraveso el cristal"
             );
         }
-        assert!(a.encuentro_blip_realizado());
-        assert!(a.jugador.z <= Z_CRISTAL + 1.6);
+        assert!(!a.encuentro_blip_realizado());
+        assert_eq!(a.encuentro_rocky.etapa, Etapa::Inicial(0));
+        let pos = (a.jugador.x, a.jugador.z);
+        a.actualizar(&adelante, 0.5);
+        assert_eq!(pos, (a.jugador.x, a.jugador.z), "dialogo permite caminar");
+        for _ in 0..5 {
+            interactuar(&mut a);
+        }
+        assert_eq!(a.encuentro_rocky.etapa, Etapa::Guiando);
+        assert!(!a.encuentro_blip_realizado(), "aun falta charla de partida");
+        // El jugador deja pasar a Rocky por la izquierda y lo sigue hasta la escotilla.
+        for _ in 0..1800 {
+            let r = a.encuentro_rocky.pos;
+            a.jugador
+                .colocar(0.65, (r.z - 2.0).max(Z_CRISTAL + 0.8), std::f32::consts::PI);
+            a.actualizar(&EntradaAventura::default(), 1.0 / 30.0);
+            if a.encuentro_rocky.apertura >= 1.0 {
+                assert!(a.mundo_blip.libre(
+                    a.encuentro_rocky.pos.x,
+                    a.encuentro_rocky.pos.z,
+                    RADIO_ROCKY
+                ));
+            }
+            if a.encuentro_rocky.en_muelle() {
+                break;
+            }
+        }
+        assert!(
+            a.encuentro_rocky.en_muelle(),
+            "Rocky no llego a la escotilla: {:?}",
+            a.encuentro_rocky.pos
+        );
+        a.jugador.colocar(0.65, -1.8, 0.0);
+        assert_eq!(a.candidato().unwrap().texto, "Volver a la cabina");
+        interactuar(&mut a);
+        avanzar(&mut a, 2.0);
+        assert_eq!(a.fase, Fase::Nave);
+        assert!(a.encuentro_rocky.en_nave);
+        assert_eq!(a.jugador.altura_ojos, 1.65);
+        // Recorre la cabina con sus puertas, mesa y TARS reales como colisionadores.
+        for _ in 0..1000 {
+            let r = a.encuentro_rocky.pos;
+            a.jugador.colocar(r.x, r.z + 2.0, 0.0);
+            a.actualizar(&EntradaAventura::default(), 1.0 / 30.0);
+            if a.encuentro_rocky.bloquea() {
+                break;
+            }
+        }
+        assert_eq!(
+            a.encuentro_rocky.etapa,
+            Etapa::Partida(0),
+            "Rocky atascado {:?}",
+            a.encuentro_rocky.pos
+        );
+        assert!(!a.encuentro_blip_realizado());
+        for _ in 0..4 {
+            interactuar(&mut a);
+        }
+        assert_eq!(a.encuentro_rocky.etapa, Etapa::Abordo);
         assert!(p.completar_encuentro_blip());
         assert!(!p.completar_encuentro_blip());
         assert_eq!(
             guia::objetivo(&escena, &p, blip.pos).unwrap().nombre,
             "ADRIEN"
         );
-        let lateral = EntradaAventura {
-            j: EntradaJ {
-                lateral: 1.0,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        for _ in 0..90 {
-            a.actualizar(&lateral, 1.0 / 30.0);
-        }
-        assert!(a.jugador.x <= 1.24 - RADIO + 0.01, "salio de la pasarela");
-        let atras = EntradaAventura {
-            j: EntradaJ {
-                adelante: -1.0,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        for _ in 0..300 {
-            a.actualizar(&atras, 1.0 / 30.0);
-        }
-        assert_eq!(a.candidato().unwrap().texto, "Volver a la cabina");
-        interactuar(&mut a);
+        a.suspender();
+        assert!(a.entrar_cabina(V3::ZERO, v3(0.0, 0.0, -1.0), v3(0.0, 1.0, 0.0), true));
         avanzar(&mut a, 2.0);
-        assert_eq!(a.fase, Fase::Nave);
-        assert_eq!(a.jugador.altura_ojos, 1.65);
+        assert_eq!(
+            a.encuentro_rocky.etapa,
+            Etapa::Abordo,
+            "conversacion repetida"
+        );
         assert!(a.encuentro_blip_realizado() && a.inv.sistemas_listos());
         a.jugador.colocar(a.pts.pilotaje.x, a.pts.pilotaje.z, 0.0);
-        assert_eq!(interactuar(&mut a), Evento::Desacoplar);
+        assert_eq!(interactuar(&mut a), Evento::VolverAlVuelo);
     }
 
     #[test]

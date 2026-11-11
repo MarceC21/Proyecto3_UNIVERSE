@@ -87,13 +87,14 @@ impl VisorInterior {
         aj: &Ajustes,
         dt: f32,
     ) -> Evento {
-        let salir = window.is_key_pressed(KeyboardKey::KEY_X)
-            || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
-            || (a.en_crucero() && window.is_key_pressed(KeyboardKey::KEY_H));
+        let salir = !a.encuentro_rocky.bloquea()
+            && (window.is_key_pressed(KeyboardKey::KEY_X)
+                || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
+                || (a.en_crucero() && window.is_key_pressed(KeyboardKey::KEY_H)));
         if window.is_key_pressed(KeyboardKey::KEY_TAB) {
             self.mouse = !self.mouse;
         }
-        if window.is_key_pressed(KeyboardKey::KEY_I) {
+        if !a.encuentro_rocky.bloquea() && window.is_key_pressed(KeyboardKey::KEY_I) {
             self.inventario = !self.inventario;
         }
         if self.mouse {
@@ -126,7 +127,8 @@ impl VisorInterior {
                 giro_y: raton.y - 420.0 * dt * eje(KeyboardKey::KEY_UP, KeyboardKey::KEY_DOWN),
                 correr: window.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
             },
-            interactuar: window.is_key_pressed(KeyboardKey::KEY_E),
+            interactuar: window.is_key_pressed(KeyboardKey::KEY_E)
+                || (a.encuentro_rocky.bloquea() && window.is_key_pressed(KeyboardKey::KEY_ENTER)),
         };
         let evento = a.actualizar(&ent, dt);
         if a.fase == Fase::Atraque
@@ -215,12 +217,19 @@ impl VisorInterior {
                 l.rect(130.0, 608.0, 1020.0, 46.0, panel);
                 l.texto(&format!("[E] {prompt}"), 154.0, 620.0, 22.0, cian);
             }
-            if let Some(mensaje) = &hud.mensaje {
-                l.rect(130.0, 664.0, 1020.0, 80.0, panel);
-                l.parrafo(mensaje, 154.0, 678.0, 86, 21.0, Color::WHITE);
+            if hud.dialogo.is_none() {
+                if let Some(mensaje) = &hud.mensaje {
+                    let y = if hud.comentario.is_some() {
+                        430.0
+                    } else {
+                        664.0
+                    };
+                    l.rect(130.0, y, 1020.0, 80.0, panel);
+                    l.parrafo(mensaje, 154.0, y + 14.0, 86, 21.0, Color::WHITE);
+                }
             }
             l.rect(20.0, 758.0, 1240.0, 30.0, panel);
-            l.texto("WASD caminar | Raton/flechas mirar | Shift correr | E interactuar | I inventario | Tab cursor | X/Esc salir",30.0,765.0,16.0,Color::WHITE);
+            l.texto(if hud.dialogo.is_some() { "E / Enter continuar | Las demas interacciones se reanudan al terminar" } else { "WASD caminar | Raton/flechas mirar | Shift correr | E interactuar | I inventario | Tab cursor | X/Esc salir" },30.0,765.0,16.0,Color::WHITE);
             if self.inventario {
                 l.rect(865.0, 20.0, 395.0, 218.0, panel);
                 l.texto(
@@ -302,6 +311,29 @@ impl VisorInterior {
                     cian,
                 );
             }
+        }
+        if let Some(linea) = hud.dialogo.or(hud.comentario) {
+            let modal = hud.dialogo.is_some();
+            let color = if linea.nombre == "ROCKY" {
+                Color::new(255, 198, 117, 255)
+            } else {
+                cian
+            };
+            l.rect(115.0, 535.0, 1050.0, 210.0, Color::new(10, 13, 20, 246));
+            l.rect(115.0, 535.0, 5.0, 210.0, color);
+            l.texto(linea.nombre, 145.0, 553.0, 26.0, color);
+            l.parrafo(linea.texto, 145.0, 595.0, 72, 25.0, Color::WHITE);
+            l.texto(
+                if modal {
+                    "[E / ENTER] Continuar"
+                } else {
+                    "Sigue caminando con Rocky"
+                },
+                145.0,
+                711.0,
+                18.0,
+                color,
+            );
         }
         l.rect(
             0.0,

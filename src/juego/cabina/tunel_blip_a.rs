@@ -17,7 +17,7 @@ pub const LARGO: f32 = 24.0;
 pub const CENTRO_Y: f32 = 2.77;
 pub const RADIO_CRISTAL: f32 = 2.05;
 pub const Z_CRISTAL: f32 = -24.1;
-/// Posición de referencia del futuro personaje, detrás del cristal. No se dibuja ninguno.
+/// Posición inicial de Rocky detrás del cristal.
 pub const POSICION_PERSONAJE: V3 = v3(0.0, 0.15, -28.0);
 
 #[derive(Clone, Copy)]
@@ -197,6 +197,7 @@ fn anillo(g: &mut Geo, interior: f32, exterior: f32, z: f32) {
 
 pub struct TunelBlipA {
     superficies: Vec<Superficie>,
+    mamparo: Vec<Superficie>,
 }
 
 impl TunelBlipA {
@@ -275,17 +276,18 @@ impl TunelBlipA {
                 v3(0.02, 0.17, 0.30),
             );
         }
+        let mut puerta: Vec<Geo> = (0..8).map(|_| Geo::vacio()).collect();
         // Mamparo final, bisel y marco hexagonal. El centro contiene vidrio real con alfa.
-        anillo(&mut g[0], 2.25, 3.25, -24.02);
-        anillo(&mut g[3], 2.08, 2.27, -24.04);
-        marco(&mut g[2], 2.22, -23.97, 0.16);
-        marco(&mut g[1], 2.09, -24.07, 0.045);
+        anillo(&mut puerta[0], 2.25, 3.25, -24.02);
+        anillo(&mut puerta[3], 2.08, 2.27, -24.04);
+        marco(&mut puerta[2], 2.22, -23.97, 0.16);
+        marco(&mut puerta[1], 2.09, -24.07, 0.045);
         for k in 0..6 {
             let p = hex(k, 2.30, -23.91);
             g[3].caja(p, v3(0.16, 0.19, 0.12));
             g[6].caja(p + v3(0.0, 0.0, 0.07), v3(0.035, 0.055, 0.008));
             triangulo(
-                &mut g[7],
+                &mut puerta[7],
                 [
                     v3(0.0, CENTRO_Y, Z_CRISTAL),
                     hex(k, RADIO_CRISTAL, Z_CRISTAL),
@@ -294,7 +296,7 @@ impl TunelBlipA {
                 v3(0.0, 0.0, 1.0),
             );
         }
-        // Cámara vacía al otro lado: lista para recibir el futuro personaje.
+        // Cámara de Rocky al otro lado del mamparo móvil.
         for k in 0..6 {
             g[5].quad(
                 [
@@ -334,20 +336,24 @@ impl TunelBlipA {
             Material::Luz,
             Material::Cristal,
         ];
-        let superficies = g
-            .into_iter()
-            .zip(materiales)
-            .map(|(geo, material)| Superficie {
-                malla: geo.a_malla(),
-                shader: Metal { material },
-                mezcla: if matches!(material, Material::Cristal) {
-                    Mezcla::Alfa
-                } else {
-                    Mezcla::Opaco
-                },
-            })
-            .collect();
-        Self { superficies }
+        let construir = |g: Vec<Geo>| {
+            g.into_iter()
+                .zip(materiales)
+                .map(|(geo, material)| Superficie {
+                    malla: geo.a_malla(),
+                    shader: Metal { material },
+                    mezcla: if matches!(material, Material::Cristal) {
+                        Mezcla::Alfa
+                    } else {
+                        Mezcla::Opaco
+                    },
+                })
+                .collect()
+        };
+        Self {
+            superficies: construir(g),
+            mamparo: construir(puerta),
+        }
     }
 
     /// Posición de observación; se puede sustituir por la cámara del futuro jugador.
@@ -361,12 +367,22 @@ impl TunelBlipA {
 
     /// Se pueden incorporar estos items al renderer de otra escena.
     pub fn items(&self) -> Vec<Item<'_>> {
+        self.items_con_apertura(0.0)
+    }
+
+    fn items_con_apertura(&self, apertura: f32) -> Vec<Item<'_>> {
         self.superficies
             .iter()
-            .map(|s| Item {
+            .map(|s| (s, V3::ZERO))
+            .chain(
+                self.mamparo
+                    .iter()
+                    .map(|s| (s, v3(0.0, apertura * 6.5, 0.0))),
+            )
+            .map(|(s, pos)| Item {
                 malla: &s.malla,
                 shader: &s.shader,
-                pos: V3::ZERO,
+                pos,
                 rot: Rot::identidad(),
                 escala: v3(1.0, 1.0, 1.0),
                 mezcla: s.mezcla,
@@ -390,7 +406,18 @@ impl TunelBlipA {
         tiempo: f32,
         extras: Vec<Item<'a>>,
     ) {
-        let mut items = self.items();
+        self.dibujar_encuentro(fb, cam, tiempo, extras, 0.0);
+    }
+
+    pub fn dibujar_encuentro<'a>(
+        &'a self,
+        fb: &mut Framebuffer,
+        cam: &Camara,
+        tiempo: f32,
+        extras: Vec<Item<'a>>,
+        apertura: f32,
+    ) {
+        let mut items = self.items_con_apertura(apertura);
         items.extend(extras);
         let (mut opacos, mut transparentes): (Vec<_>, Vec<_>) =
             items.into_iter().partition(|i| i.mezcla == Mezcla::Opaco);
@@ -477,11 +504,7 @@ mod tests {
     #[test]
     fn cristal_hexagonal_semitransparente_y_camara_vacia_detras() {
         let t = TunelBlipA::nuevo();
-        let cristal = t
-            .superficies
-            .iter()
-            .find(|s| s.mezcla == Mezcla::Alfa)
-            .unwrap();
+        let cristal = t.mamparo.iter().find(|s| s.mezcla == Mezcla::Alfa).unwrap();
         assert_eq!(cristal.malla.idx.len(), 6);
         assert!(POSICION_PERSONAJE.z < Z_CRISTAL);
         let f = Fragmento {

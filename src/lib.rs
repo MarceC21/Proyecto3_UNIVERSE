@@ -113,3 +113,8 @@ pub mod escena_adrian;
 #[cfg(feature = "ventana")]
 #[path = "galaxias/tau_ceti/adrian/interfaz.rs"]
 pub mod interfaz_adrian;
+
+#[path = "juego/cabina/rocky.rs"]
+pub mod rocky;
+#[path = "juego/estados/encuentro_rocky.rs"]
+pub mod encuentro_rocky;

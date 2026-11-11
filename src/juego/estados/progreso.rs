@@ -29,7 +29,7 @@ pub struct Progreso {
 impl Progreso {
     pub fn nave_cafe_visitada(&self) -> bool { self.nave_cafe_visitada }
     pub fn adrien_disponible(&self) -> bool { self.nave_cafe_visitada }
-    // Solo la aventura llama aquí después de llegar al cristal del pasillo.
+    // La aventura lo concede al terminar el recorrido y la charla de partida de Rocky.
     pub fn completar_encuentro_blip(&mut self) -> bool {
         if self.actual != Galaxia::TauCeti || self.nave_cafe_visitada { return false; }
         self.nave_cafe_visitada = true;

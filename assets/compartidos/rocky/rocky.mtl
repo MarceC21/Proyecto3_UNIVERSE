@@ -1,0 +1,15 @@
+newmtl Roca
+Kd 0.55 0.39 0.27
+
+newmtl Roca_clara
+Kd 0.67 0.5 0.36
+
+newmtl Roca_oscura
+Kd 0.37 0.26 0.18
+
+newmtl Grieta
+Kd 0.17 0.11 0.08
+
+newmtl Mancha_verde
+Kd 0.14 0.86 0.46
+

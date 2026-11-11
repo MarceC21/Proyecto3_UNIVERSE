@@ -333,19 +333,32 @@ y hace la transición al interior de tu nave. La cámara libre no activa el atra
 1. Recorre la cabina hasta la esclusa trasera y usa **E** en el panel para abrir
    la escotilla, como en la estación espacial.
 2. Recorre la esclusa y pulsa **E** en el extremo: **Entrar al pasillo de Blip-A**.
-3. Camina con **WASD** por el túnel oscuro hasta el **cristal hexagonal**. La
-   pasarela y el vidrio tienen límites de colisión. El espacio al otro lado
-   permanece vacío para incorporar después al nuevo personaje.
-4. Al llegar al cristal se registra el **punto de encuentro** y se habilita
-   el destino **Adrien**. Aproximarse a Blip-A o entrar a la cabina no lo completa.
-5. Regresa al inicio del pasillo y usa **E** para volver a la cabina. Puedes
-   desacoplar desde la consola de pilotaje o volver al vuelo con **X/Esc**.
+3. Camina con **WASD** hasta el **cristal hexagonal**. Rocky espera al otro lado,
+   usando tu OBJ y sus materiales café y verdes. La proximidad inicia su saludo.
+4. Avanza las conversaciones con **E o Enter**. El panel muestra quién habla;
+   durante estas conversaciones se bloquean movimiento, inventario, otras
+   interacciones y salida, para no ejecutar una acción al pasar de línea.
+5. Al terminar aparece **NUEVA MISIÓN: SIGUE A ROCKY**. El mamparo se eleva
+   y Rocky camina hacia la escotilla. Deja libre un lado del pasillo para que pase.
+   Si te alejas más de 6 unidades espera, y continúa al acercarte a menos de 4.5.
+   Sus comentarios del recorrido no bloquean el movimiento.
+6. Cuando ambos estén junto a la escotilla, usa **E** para regresar a la cabina.
+   Rocky entra contigo, camina hasta su lugar junto a la zona de mando y comienza
+   la conversación de partida cuando te acercas.
+7. Solo al terminar esta segunda conversación aparece **OBJETIVO ACTUALIZADO:
+   VIAJA A ADRIAN** y la guía apunta a **Adrien** (nombre actual del planeta).
+   Desacopla desde la consola de pilotaje o con **X/Esc** fuera del diálogo.
 
-Salir antes del cristal mantiene Blip-A como objetivo y permite volver a intentarlo.
-El encuentro completado se conserva al viajar entre sistemas durante la sesión
-y se reinicia al cerrar el juego. Al regresar a Blip-A se puede recorrer el túnel
-de nuevo. El personaje y su diálogo quedan para la siguiente etapa; por ahora
-basta con alcanzar el cristal para habilitar la operación de Adrien.
+Rocky reutiliza la carga OBJ, los materiales, los pasos alternados y las consultas
+con subpasos de colisión usados por TARS. Respeta los muebles y puertas de la
+cabina. Tras el encuentro permanece a bordo junto a TARS, también al inspeccionar
+la cabina en crucero con **H**. El boceto y su generador se conservan en
+`assets/compartidos/rocky/`; la lógica vive en `src/juego/estados/encuentro_rocky.rs`
+y el modelo animado en `src/juego/cabina/rocky.rs`.
+
+Salir antes de completar las conversaciones no habilita Adrien. El estado del
+encuentro se conserva durante la sesión, las conversaciones completadas no se
+repiten y el progreso se reinicia al cerrar el juego.
 Llegar a Tau Ceti no completa esa misión ni desbloquea Eridani.
 
 El túnel forma parte del proyecto en `src/juego/cabina/tunel_blip_a.rs`; se retiró
@@ -369,7 +382,7 @@ cargo run --release --no-default-features --bin exportar_tau_ceti -- /tmp/tau-ce
 
 ## Adrien: Operación Taumoeba
 
-Después del encuentro en el cristal de Blip-A, acércate a **Adrien** a una
+Después de acompañar a Rocky y terminar su charla de partida, acércate a **Adrien** a una
 altura de **6.5 o menos**, con velocidad **6 o menor**, usando la nave real.
 Se activa la transición de cinco segundos de la **Línea Petrova**: nebulosa,
 franjas y partículas rojas animadas. Es una representación artística. Después
