@@ -66,6 +66,13 @@ pub fn objetivo(escena: &Escena, progreso: &Progreso, nave: V3) -> Option<Objeti
             pos,
         });
     }
+    if escena.galaxia == Galaxia::Eridani {
+        return cuerpo("Erid").map(|pos| Objetivo {
+            nombre: "ERID",
+            indicacion: "Hogar de Rocky / Explora el sistema / M para volver",
+            pos,
+        });
+    }
     let radial = v3(nave.x, 0.0, nave.z);
     let dir = if radial.len() > 0.01 {
         radial.norm()

@@ -405,7 +405,7 @@ La cámara libre no activa la misión y una operación activa no se abre otra ve
   permite salir en cualquier momento. Desde el resultado, **R** o el botón de
   reinicio limpia las muestras, integridad, objetos, efectos y nave temporal.
 - Hay victoria, derrota por daños y derrota por tiempo. La victoria completa
-  Tau Ceti y revela la siguiente ruta en el mapa; Eridani todavía no tiene escena.
+  Tau Ceti, revela **40 Eridani A** en el mapa y traza la ruta para viajar allí.
 
 La simulación usa una instancia temporal de **`Nave::actualizar`**, con las
 mismas aceleración, amortiguación y cinco esferas de colisión. La traducción
@@ -433,6 +433,47 @@ Vistas sin ventana de la introducción, muestras, obstáculos y extracción:
 cargo run --release --no-default-features --bin exportar_adrian -- /tmp/adrian
 ```
 
+## 40 Eridani: hogar de Rocky
+
+Tras ganar **Operación Taumoeba** en Adrien, el mapa revela **40 Eridani A** y
+selecciona esa ruta. Vuela al límite de Tau Ceti para activar el motor y llegar
+al último sistema. También puedes seleccionar el destino con **M → 4** cuando
+esté desbloqueado. Llegar no completa automáticamente ninguna misión nueva.
+Desde Eridani puedes volver a Tau Ceti o elegir otro sistema ya desbloqueado.
+
+- **40 Eridani A:** estrella naranja central de radio 9, con superficie y halo animados.
+- **Erid:** planeta principal azul de radio 7, nubes blancas y tres bandas de
+  anillos inclinados: una dorada interior y dos azul-blanco, separadas por huecos.
+- **40 Eri A 2:** mundo templado tostado con mares y nubes; **40 Eri A 1** y
+  **40 Eri A 2b:** pequeños rocosos rojizos con cráteres; **40 Eri A 3:** gigante
+  gaseoso blanco-azulado. Cada uno tiene su textura procedural.
+- **40 Eridani B y C:** compañeras blanca y roja situadas juntas, fuera del
+  cinturón. Son cuerpos visibles y sólidos a los que puedes acercarte.
+- Cinturón reproducible de 1500 asteroides entre radios 340 y 376, límite a
+  620 y cielo propio con nebulosas verdes, turquesas y violetas.
+
+Es una representación artística de tu propuesta: los tamaños y distancias están
+ajustados al juego. Comparte vuelo, cámara, modo local, colisiones, LOD, culling,
+materiales y rasterizador con los otros sistemas. La llegada queda despejada
+antes del cinturón, y la flecha señala **Erid** para explorarlo. La cabina sigue
+accesible con **H**; en una partida normal Rocky permanece a bordo.
+
+Atajos de vista: **0** general, **1** estrella A, **2** Erid, **3** templado,
+**4** rocoso, **5** gigante, **6** rocoso II, **7** estrella B, **8** estrella C,
+**U** cinturón y **N** límite. Los controles de vuelo conservan sus funciones.
+
+Acceso directo de inspección, que habilita los requisitos previos en esa ejecución:
+
+```bash
+cargo run --release -- --galaxia eridani
+```
+
+Vistas sin ventana generadas con el rasterizador del juego:
+
+```bash
+cargo run --release --no-default-features --bin exportar_eridani -- /tmp/eridani
+```
+
 ## Organización
 
 - `src/motor/`: cámara genérica, cielo, matemáticas, geometría, texturas y renderizado.
@@ -441,6 +482,8 @@ cargo run --release --no-default-features --bin exportar_adrian -- /tmp/adrian
 - `src/galaxias/sistema_solar/`: escena, estación y generadores de planetas.
 - `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
 - `src/galaxias/tau_ceti/`: tercer sistema, ocho texturas, estrella cian y skybox propio.
+- `src/galaxias/eridani/`: cuarto sistema, texturas, cielo y estrellas A/B/C.
+- `src/bin/exportar_eridani.rs`: vistas del último sistema y de la llegada.
 - `src/galaxias/tau_ceti/adrian/`: visuales e interfaz de Operación Taumoeba.
 - `src/juego/estados/adrian.rs`: fases, objetos, cronómetro, impactos y extracción.
 - `src/galaxias/tau_ceti/nave_cafe.rs`: modelo de encuentro, posición y escala.

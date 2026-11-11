@@ -118,3 +118,10 @@ pub mod interfaz_adrian;
 pub mod rocky;
 #[path = "juego/estados/encuentro_rocky.rs"]
 pub mod encuentro_rocky;
+
+#[path = "galaxias/eridani/generadores.rs"]
+pub mod generadores_eridani;
+#[path = "galaxias/eridani/cielo.rs"]
+pub mod cielo_eridani;
+#[path = "galaxias/eridani/escena.rs"]
+pub mod eridani;

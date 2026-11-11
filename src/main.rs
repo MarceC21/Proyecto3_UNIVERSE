@@ -39,7 +39,7 @@ fn cargar_sistema(galaxia: Galaxia) -> (Escena, Cielo, V3, V3) {
         }
         Galaxia::Gargantua => (Escena::gargantua(),Cielo::gargantua(),nave_raster::gargantua::INICIO,V3::ZERO),
         Galaxia::TauCeti => (Escena::tau_ceti(),Cielo::tau_ceti(),nave_raster::tau_ceti::INICIO,V3::ZERO),
-        Galaxia::Eridani => unreachable!("Sistema todavia no disponible"),
+        Galaxia::Eridani => (Escena::eridani(),Cielo::eridani(),nave_raster::eridani::INICIO,V3::ZERO),
     }
 }
 
@@ -63,7 +63,8 @@ fn main() {
                 Some("gargantua") => Galaxia::Gargantua,
                 Some("solar") => Galaxia::Solar,
                 Some("tau-ceti") | Some("tau_ceti") => Galaxia::TauCeti,
-                _ => { eprintln!("Usa --galaxia solar, gargantua o tau-ceti"); std::process::exit(1); }
+                Some("eridani") | Some("40-eridani") => Galaxia::Eridani,
+                _ => { eprintln!("Usa --galaxia solar, gargantua, tau-ceti o eridani"); std::process::exit(1); }
             };
         } else if ruta.is_none() { ruta = Some(arg); }
         else { eprintln!("Argumento no reconocido: {arg}"); std::process::exit(1); }
@@ -107,9 +108,14 @@ fn main() {
         progreso.completar_estacion();
         progreso.completar_marte();
         progreso.viajar(Galaxia::Gargantua);
-        if galaxia_inicial == Galaxia::TauCeti {
+        if matches!(galaxia_inicial, Galaxia::TauCeti | Galaxia::Eridani) {
             progreso.completar(Galaxia::Gargantua);
             progreso.viajar(Galaxia::TauCeti);
+        }
+        if galaxia_inicial == Galaxia::Eridani {
+            progreso.completar_encuentro_blip();
+            progreso.completar(Galaxia::TauCeti);
+            progreso.viajar(Galaxia::Eridani);
         }
         mision_marte.marcar_completada();
     }
@@ -296,7 +302,7 @@ fn main() {
                 (KeyboardKey::KEY_FOUR, "edmunds"), (KeyboardKey::KEY_FIVE, "thalos"),
                 (KeyboardKey::KEY_SIX, "nyx"), (KeyboardKey::KEY_SEVEN, "aurora"),
                 (KeyboardKey::KEY_EIGHT, "limite")]
-        } else {
+        } else if escena.galaxia == Galaxia::TauCeti {
             vec![(KeyboardKey::KEY_ZERO,"general"),(KeyboardKey::KEY_ONE,"tau ceti"),
                 (KeyboardKey::KEY_TWO,"adrien"),(KeyboardKey::KEY_THREE,"gigante"),
                 (KeyboardKey::KEY_FOUR,"ceti nova"),(KeyboardKey::KEY_FIVE,"oceanus"),
@@ -304,6 +310,13 @@ fn main() {
                 (KeyboardKey::KEY_EIGHT,"veridia"),(KeyboardKey::KEY_NINE,"aethel"),
                 (KeyboardKey::KEY_U,"cinturon"),(KeyboardKey::KEY_N,"limite"),
                 (KeyboardKey::KEY_T,"nave_cafe")]
+        } else {
+            vec![(KeyboardKey::KEY_ZERO,"general"),(KeyboardKey::KEY_ONE,"40 eridani a"),
+                (KeyboardKey::KEY_TWO,"erid"),(KeyboardKey::KEY_THREE,"40 eri a 2"),
+                (KeyboardKey::KEY_FOUR,"40 eri a 1"),(KeyboardKey::KEY_FIVE,"40 eri a 3"),
+                (KeyboardKey::KEY_SIX,"40 eri a 2b"),(KeyboardKey::KEY_SEVEN,"40 eridani b"),
+                (KeyboardKey::KEY_EIGHT,"40 eridani c"),(KeyboardKey::KEY_U,"cinturon"),
+                (KeyboardKey::KEY_N,"limite")]
         };
         for (tecla, nombre) in teclas {
             if window.is_key_pressed(tecla) {
@@ -511,9 +524,12 @@ fn main() {
         } else if escena.galaxia == Galaxia::Gargantua {
             d.draw_text("GARGANTUA: 0 general  1 centro  2 Miller  3 Mann  4 Edmunds  5 Thalos", 16, 124, 14, Color::LIGHTGRAY);
             d.draw_text("6 Nyx  7 Aurora  8 limite  M Mapa  F1-F3 calidad", 16, 144, 14, Color::LIGHTGRAY);
-        } else {
+        } else if escena.galaxia == Galaxia::TauCeti {
             d.draw_text("TAU CETI: 0 general  1 estrella  2 Adrien  3 Gigante  4 Ceti Nova  5 Oceanus",16,124,14,Color::LIGHTGRAY);
             d.draw_text("6 Saturn 7 Ceti Nova II 8 Veridia 9 Aethel T Blip-A U cinturon N limite M mapa",16,144,14,Color::LIGHTGRAY);
+        } else {
+            d.draw_text("40 ERIDANI: 0 general 1 estrella A 2 Erid 3 templado 4 rocoso 5 gigante",16,124,14,Color::LIGHTGRAY);
+            d.draw_text("6 rocoso II 7 enana blanca B 8 enana roja C U cinturon N limite M mapa",16,144,14,Color::LIGHTGRAY);
         }
 
         // Modo local (rodear un cuerpo).

@@ -14,7 +14,7 @@ impl Galaxia {
         match self { Self::Solar => "SISTEMA SOLAR", Self::Gargantua => "GARGANTUA",
             Self::TauCeti => "TAU CETI", Self::Eridani => "40 ERIDANI A" }
     }
-    pub fn implementada(self) -> bool { matches!(self, Self::Solar | Self::Gargantua | Self::TauCeti) }
+    pub fn implementada(self) -> bool { matches!(self, Self::Solar | Self::Gargantua | Self::TauCeti | Self::Eridani) }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -79,6 +79,30 @@ impl Progreso {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn taumoeba_habilita_salto_a_eridani_y_retorno_sin_completar_el_hogar() {
+        let mut p = Progreso::default();
+        p.completar_estacion(); p.completar_marte();
+        p.completar(Galaxia::Gargantua); p.viajar(Galaxia::TauCeti);
+        assert!(!p.viajar(Galaxia::Eridani));
+        p.completar_encuentro_blip();
+        assert!(!p.desbloqueada(Galaxia::Eridani), "Rocky no completa Taumoeba");
+        assert!(p.completar(Galaxia::TauCeti));
+        assert_eq!(p.ruta(),Some(Galaxia::Eridani));
+        let mut salto = crate::salto::Salto::default();
+        assert!(salto.observar(&p,2.0,true)); salto.actualizar(2.1);
+        assert!(salto.listo());
+        assert_eq!(salto.solicitud().unwrap().destino,Galaxia::Eridani);
+        assert!(p.viajar(Galaxia::Eridani));
+        assert!(!p.completada(Galaxia::Eridani));
+        assert_eq!(p.ruta(),Some(Galaxia::TauCeti));
+        let objetivo = crate::guia::objetivo(&crate::escena::Escena::eridani(),&p,crate::eridani::INICIO).unwrap();
+        assert_eq!(objetivo.nombre,"ERID");
+        assert!(p.viajar(Galaxia::TauCeti));
+        assert_eq!(p.ruta(),Some(Galaxia::Eridani));
+        assert!(p.adrien_disponible());
+        assert!(!Progreso::default().desbloqueada(Galaxia::Eridani));
+    }
     #[test]
     fn miller_habilita_salto_a_tau_ceti_y_permite_regresar_sin_revelar_eridani() {
         let mut p = Progreso::default();

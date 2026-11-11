@@ -224,6 +224,10 @@ impl Escena {
                 cam.pos = v3(0.0, 23.0, 110.0);
                 cam.mirar_a(c.pos);
             }
+            if self.galaxia == Galaxia::Eridani && c.nombre == "Erid" {
+                cam.pos.y += c.radio * 2.0;
+                cam.mirar_a(c.pos);
+            }
             let (f, _, _) = cam.base();
             v.push((c.nombre.to_lowercase(), cam.pos, cam.pos + f));
         }
