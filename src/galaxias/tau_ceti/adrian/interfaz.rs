@@ -315,7 +315,7 @@ impl OperacionAdrian {
                 let (titulo, detalle, color) = match m.fase {
                     Fase::Final(Resultado::Victoria) => (
                         "MISION COMPLETADA",
-                        "Las muestras de taumoebas han sido recuperadas.",
+                        "Muestras recuperadas. Vuelve a la cabina [H] y envia los datos desde el Nucleo.",
                         VERDE,
                     ),
                     Fase::Final(Resultado::Danos) => (

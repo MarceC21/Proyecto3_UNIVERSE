@@ -53,12 +53,16 @@ impl Parte {
 
 // Borra la profundidad y dibuja los items encima de lo que ya hay en el framebuffer.
 pub fn dibujar_items(fb: &mut Framebuffer, items: &[Item], cam: &Camara, tiempo: f32) -> usize {
+    dibujar_items_con_sol(fb,items,cam,tiempo,v3(0.0,6.0,0.0))
+}
+
+pub fn dibujar_items_con_sol(fb: &mut Framebuffer, items: &[Item], cam: &Camara, tiempo:f32, sol:V3)->usize {
     let (w, _h) = (fb.width, fb.height);
     let vista = Vista::de(cam, fb.width, fb.height);
     let ctx = Contexto {
         cam: cam.pos,
         tiempo,
-        sol: v3(0.0, 6.0, 0.0),
+        sol,
     };
     let hilos = nucleos();
     fb.zbuf.fill(0.0);

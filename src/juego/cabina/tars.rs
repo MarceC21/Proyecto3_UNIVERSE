@@ -173,11 +173,37 @@ impl Tars {
     }
 
     pub fn items(&self) -> Vec<crate::dibujo::Item<'_>> {
-        let rot = Rot::rot_y(self.angulo);
+        self.items_columnas(self.origen, self.angulo, self.cols)
+    }
+
+    // La playa reutiliza el mismo modelo y el mismo balanceo de cuatro columnas.
+    pub fn items_pose(
+        &self,
+        origen: V3,
+        angulo: f32,
+        paso: f32,
+        moviendo: bool,
+    ) -> Vec<crate::dibujo::Item<'_>> {
+        let mut cols = [V3::ZERO; 4];
+        if moviendo {
+            for (i, col) in cols.iter_mut().enumerate() {
+                let f = paso / LONGITUD_PASO * TAU + if i % 2 == 0 { 0.0 } else { PI };
+                *col = v3(0.0, f.sin().max(0.0) * 0.10, f.cos() * 0.07);
+            }
+        }
+        self.items_columnas(origen, angulo, cols)
+    }
+    fn items_columnas(
+        &self,
+        origen: V3,
+        angulo: f32,
+        cols: [V3; 4],
+    ) -> Vec<crate::dibujo::Item<'_>> {
+        let rot = Rot::rot_y(angulo);
         self.partes
             .iter()
             .map(|(c, p)| {
-                let pos = self.origen + rot.aplicar(self.cols[*c] * ESCALA);
+                let pos = origen + rot.aplicar(cols[*c] * ESCALA);
                 p.item(pos, rot, v3(ESCALA, ESCALA, ESCALA))
             })
             .collect()

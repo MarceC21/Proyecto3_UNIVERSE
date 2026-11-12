@@ -20,11 +20,66 @@ cargo run --release -- /ruta/a/nave.obj
 El vuelo, la escala, las cinco esferas de colisión y las posiciones de los
 motores están configurados para el modelo incluido.
 
-La partida comienza cerca de la **Tierra**, mirando hacia la estación espacial.
+Tras el menú y la introducción, la partida comienza cerca de la **Tierra**,
+mirando hacia la estación espacial.
 La flecha dorada y el panel de objetivo guían el recorrido: **estación → Marte
-→ límite para saltar → Miller → siguiente límite**. El objetivo cambia con
+→ límite para saltar → Miller → Blip-A / Rocky → Adrien → envío de datos
+→ Erid / playa**. El objetivo cambia con
 el progreso; si está fuera de vista, la flecha se mantiene en el borde y señala
 el giro. El marcador indica también la distancia y si el destino está detrás.
+
+## Menú e introducción: Última Luz
+
+La ejecución normal muestra **Nuevo juego**, **Controles** y **Salir** sobre
+una vista orbital de la Tierra. Usa **flechas / W-S** y **Enter / Espacio**, o
+ratón y clic. En el panel de controles, **Escape / Enter** vuelve al menú.
+
+**Nuevo juego** reproduce tu introducción en tres planos:
+
+1. Tierra, con atenuación gradual de la luz y los textos del Sol apagándose (0–6 s).
+2. Cabina, con tu personaje de impermeable amarillo junto a TARS (6–14 s).
+   El modelo conserva sus materiales OBJ y anima respiración, brazos y cabeza.
+3. Título **ÚLTIMA LUZ**, que espera confirmación para empezar a pilotar.
+
+Los cortes tienen fundidos a negro y los subtítulos aparecen y desaparecen
+suavemente. **Enter / Espacio / Escape** omite la introducción; en el título
+puedes usar también un clic. El menú y la película no mueven la nave ni adelantan
+misiones. Al continuar se conserva el inicio junto a la Tierra y la guía hacia
+la estación. En vuelo, **Escape** cierra el panel de estadísticas o controles
+si está abierto; sin paneles abiertos, sale del programa.
+
+Los accesos de inspección (**--galaxia**, **--miller**, **--adrian**, **--estacion**
+y **--playa**) omiten el menú y la intro. Para entrar directamente al vuelo
+normal, con el progreso inicial bloqueado:
+
+```bash
+cargo run --release -- --sin-intro
+```
+
+Los dos archivos entregados como `intro.rs` se integraron por separado: la
+lógica de cámaras en `src/juego/estados/intro.rs`, y los textos en
+`src/juego/historia/dialogos_intro.rs`. El OBJ, MTL y generador del personaje
+están en `assets/compartidos/personaje/`. Las escenas 3D usan el rasterizador
+compartido; raylib presenta el framebuffer y dibuja el menú y los subtítulos.
+
+Para exportar los fondos y el personaje con el rasterizador, sin ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_inicio -- /tmp/inicio
+```
+
+## HUD durante el vuelo
+
+El vuelo muestra solo los accesos **F4 Estadísticas** y **F5 Controles**. Ambos
+paneles empiezan ocultos y se alternan con su tecla; **Esc** cierra el panel
+abierto. Abrir uno sustituye al otro y no pausa la nave.
+
+Las estadísticas reúnen FPS, velocidad, objetos, triángulos y los estados de
+culling/LOD. Los controles aparecen en otro cuadro con fondo oscuro casi opaco.
+Se retiraron las etiquetas generales de los planetas y las listas de atajos a
+sus vistas; los atajos de inspección continúan funcionando. Los objetivos de
+historia y avisos de interacción conservan su función, con cuadros de fondo,
+bordes y ajuste de líneas para que se lean sobre el espacio.
 
 ## Controles
 
@@ -43,6 +98,8 @@ el giro. El marcador indica también la distancia y si el destino está detrás.
 | Tab | Liberar / capturar cursor |
 | C / L / O / B | Alternar culling, LOD, guías orbitales y barrera visible |
 | F1 / F2 / F3 | Calidad alta / media / baja |
+| F4 | Mostrar / ocultar estadísticas de rendimiento |
+| F5 | Mostrar / ocultar el panel de controles de vuelo |
 | 0 | Vista general |
 | 1 / 2 / 3 / 4 / 5 | Sol / Mercurio / Venus / Tierra / Marte |
 | 6 / 7 | Cinturón / límite |
@@ -136,7 +193,8 @@ geometría, ruido y shaders del rasterizador en CPU.
   está abierto el juego. Al reiniciar se vuelve a empezar desde cero.
 
 La simulación de vuelo se pausa mientras estás en la terminal. En el espacio,
-Escape sigue cerrando el programa.
+Escape cierra primero el panel de ayuda/estadísticas si está abierto; sin
+paneles abiertos sigue cerrando el programa.
 
 ## Mapa y preparación del salto
 
@@ -428,7 +486,8 @@ La cámara libre no activa la misión y una operación activa no se abre otra ve
   permite salir en cualquier momento. Desde el resultado, **R** o el botón de
   reinicio limpia las muestras, integridad, objetos, efectos y nave temporal.
 - Hay victoria, derrota por daños y derrota por tiempo. La victoria completa
-  Tau Ceti, revela **40 Eridani A** en el mapa y traza la ruta para viajar allí.
+  Tau Ceti y permite transmitir los datos desde la cabina. Esa transmisión
+  revela **40 Eridani A** y traza la siguiente ruta.
 
 La simulación usa una instancia temporal de **`Nave::actualizar`**, con las
 mismas aceleración, amortiguación y cinco esferas de colisión. La traducción
@@ -458,8 +517,11 @@ cargo run --release --no-default-features --bin exportar_adrian -- /tmp/adrian
 
 ## 40 Eridani: hogar de Rocky
 
-Tras ganar **Operación Taumoeba** en Adrien, el mapa revela **40 Eridani A** y
-selecciona esa ruta. Vuela al límite de Tau Ceti para activar el motor y llegar
+Tras ganar **Operación Taumoeba** en Adrien, entra a la cabina con **H**, ve a la
+consola del **Núcleo** (muro de mando derecho) y pulsa **E** para transmitir los
+datos. El enlace tarda cuatro segundos y la estación confirma la recepción.
+Solo entonces el mapa revela **40 Eridani A** y selecciona esa ruta.
+Vuela al límite de Tau Ceti para activar el motor y llegar
 al último sistema. También puedes seleccionar el destino con **M → 4** cuando
 esté desbloqueado. Llegar no completa automáticamente ninguna misión nueva.
 Desde Eridani puedes volver a Tau Ceti o elegir otro sistema ya desbloqueado.
@@ -497,6 +559,51 @@ Vistas sin ventana generadas con el rasterizador del juego:
 cargo run --release --no-default-features --bin exportar_eridani -- /tmp/eridani
 ```
 
+## Erid: playa y final de la historia
+
+Después de transmitir los datos, acércate a **Erid** con la nave real, a una
+altura de **6.5 o menos** y velocidad **6 o menor**. Comienza un aterrizaje
+animado de cinco segundos; la cámara muestra la nave descendiendo a la bahía.
+La cámara libre no activa el aterrizaje.
+
+La playa adapta el boceto entregado: agua turquesa con oleaje y espuma, arena y
+guijarros, acantilados blancos con vegetación y un arco rocoso junto al mar.
+Rocky y TARS te esperan en la orilla, junto a la nave aterrizada. Se reutilizan
+sus modelos y el mismo rasterizador con z-buffer. El cielo de superficie se
+hornea al cargar, y el mar mantiene su animación procedural.
+
+- **E / Enter:** avanzar la conversación de cierre. Llegar o abandonar antes
+  de terminarla no marca el final como completado.
+- Al terminar, **Enter / E** permite quedarse en la playa; **X / Esc** vuelve
+  al espacio para seguir explorando. No se cierra el juego al completar la historia.
+- En la playa: **WASD** caminar/nadar, ratón/flechas mirar, **Shift** correr en tierra,
+  **E** hablar cerca de Rocky o TARS, **Tab** cursor y **F1–F3** calidad.
+- Al acabar los diálogos, Rocky y TARS pasean por distintos puntos de la orilla,
+  se esperan, hacen pausas y conversan entre ellos. Al acercarte se detienen,
+  te miran y puedes hablar con **E** en su posición actual. Sus colisiones se
+  actualizan durante el paseo; reutilizan sus animaciones de caminar.
+- Puedes entrar al mar con **WASD**. En agua profunda nadas automáticamente,
+  más despacio y sin hundir la cámara; basta volver hacia la costa para caminar.
+  La superficie tiene un balanceo suave. Los personajes permanecen en tierra.
+- Se conservan las colisiones con nave, compañeros y pilares del arco, y el
+  límite del acantilado. La zona de baño se extiende hasta 85 unidades mar adentro.
+- **X / Esc** despega desde la playa. Puedes regresar después: hay un nuevo
+  descenso, seguido del paseo libre, sin repetir el cierre de la historia.
+- Los datos enviados y el final se conservan al viajar entre sistemas durante
+  la sesión. Como el resto del juego, se reinician al cerrar el programa.
+
+Prueba directa del final (habilita los requisitos solo para esa ejecución):
+
+```bash
+cargo run --release -- --playa
+```
+
+Vistas de la bahía, personajes y descenso sin abrir ventana:
+
+```bash
+cargo run --release --no-default-features --bin exportar_playa_erid -- /tmp/playa-erid
+```
+
 ## Organización
 
 - `src/motor/`: cámara genérica, cielo, matemáticas, geometría, texturas y renderizado.
@@ -506,6 +613,8 @@ cargo run --release --no-default-features --bin exportar_eridani -- /tmp/eridani
 - `src/galaxias/gargantua/`: configuración del segundo sistema, seis texturas y agujero negro.
 - `src/galaxias/tau_ceti/`: tercer sistema, ocho texturas, estrella cian y skybox propio.
 - `src/galaxias/eridani/`: cuarto sistema, texturas, cielo y estrellas A/B/C.
+- `src/galaxias/eridani/erid/`: bahía, elenco reutilizado y presentación del epílogo.
+- `src/juego/estados/erid.rs`: descenso, conversación final y paseo por la costa.
 - `src/bin/exportar_eridani.rs`: vistas del último sistema y de la llegada.
 - `src/galaxias/tau_ceti/adrian/`: visuales e interfaz de Operación Taumoeba.
 - `src/juego/estados/adrian.rs`: fases, objetos, cronómetro, impactos y extracción.

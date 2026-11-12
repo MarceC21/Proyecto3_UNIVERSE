@@ -66,10 +66,11 @@ pub fn objetivo(escena: &Escena, progreso: &Progreso, nave: V3) -> Option<Objeti
             pos,
         });
     }
-    if escena.galaxia == Galaxia::Eridani {
+    if progreso.completada(Galaxia::TauCeti) && !progreso.datos_enviados() { return None; }
+    if escena.galaxia == Galaxia::Eridani && !progreso.completada(Galaxia::Eridani) {
         return cuerpo("Erid").map(|pos| Objetivo {
             nombre: "ERID",
-            indicacion: "Hogar de Rocky / Explora el sistema / M para volver",
+            indicacion: "Acercate despacio / Aterriza en la playa de Rocky",
             pos,
         });
     }
@@ -159,7 +160,7 @@ pub fn dibujar<D: raylib::prelude::RaylibDraw>(
         (y + 12.0) as i32,
         ancho as i32,
         28,
-        Color::new(4, 15, 24, 205),
+        Color::new(4, 15, 24, 245),
     );
     d.draw_text(&etiqueta, (tx + 8.0) as i32, (y + 17.0) as i32, 16, c);
     d.draw_rectangle(
@@ -167,7 +168,7 @@ pub fn dibujar<D: raylib::prelude::RaylibDraw>(
         (oy + 12.0) as i32,
         488.min(w as i32 - 16),
         62,
-        Color::new(4, 15, 24, 205),
+        Color::new(4, 15, 24, 245),
     );
     let tx = (ox + w - 488.0).max(ox + 16.0) as i32;
     d.draw_text(

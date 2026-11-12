@@ -20,6 +20,7 @@ impl Galaxia {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Progreso {
     estacion: bool,
+    datos_enviados: bool,
     nave_cafe_visitada: bool,
     completadas: [bool; 4],
     ruta: Option<Galaxia>,
@@ -27,6 +28,13 @@ pub struct Progreso {
 }
 
 impl Progreso {
+    pub fn datos_enviados(&self) -> bool { self.datos_enviados }
+    pub fn transmitir_datos(&mut self) -> bool {
+        if !self.completada(Galaxia::TauCeti) || self.datos_enviados { return false; }
+        self.datos_enviados = true;
+        self.ruta = Some(Galaxia::Eridani);
+        true
+    }
     pub fn nave_cafe_visitada(&self) -> bool { self.nave_cafe_visitada }
     pub fn adrien_disponible(&self) -> bool { self.nave_cafe_visitada }
     // La aventura lo concede al terminar el recorrido y la charla de partida de Rocky.
@@ -54,7 +62,7 @@ impl Progreso {
         true
     }
     pub fn desbloqueada(&self, g: Galaxia) -> bool {
-        g == Galaxia::Solar || self.completadas[g.indice() - 1]
+        g == Galaxia::Solar || (self.completadas[g.indice() - 1] && (g != Galaxia::Eridani || self.datos_enviados))
     }
     pub fn completada(&self, g: Galaxia) -> bool { self.completadas[g.indice()] }
     pub fn completar_marte(&mut self) -> bool { self.completar(Galaxia::Solar) }
@@ -64,7 +72,7 @@ impl Progreso {
         if g == Galaxia::Solar && !self.marte_disponible() { return false; }
         if !self.desbloqueada(g) || self.completada(g) { return false; }
         self.completadas[g.indice()] = true;
-        if let Some(siguiente) = GALAXIAS.get(g.indice() + 1) { self.ruta = Some(*siguiente); }
+        if let Some(siguiente) = GALAXIAS.get(g.indice() + 1).filter(|s| self.desbloqueada(**s)) { self.ruta = Some(*siguiente); }
         true
     }
     pub fn seleccionar_ruta(&mut self, g: Galaxia) -> bool {
@@ -88,6 +96,9 @@ mod tests {
         p.completar_encuentro_blip();
         assert!(!p.desbloqueada(Galaxia::Eridani), "Rocky no completa Taumoeba");
         assert!(p.completar(Galaxia::TauCeti));
+        assert!(!p.desbloqueada(Galaxia::Eridani));
+        assert!(p.transmitir_datos());
+        assert!(!p.transmitir_datos());
         assert_eq!(p.ruta(),Some(Galaxia::Eridani));
         let mut salto = crate::salto::Salto::default();
         assert!(salto.observar(&p,2.0,true)); salto.actualizar(2.1);
@@ -183,6 +194,8 @@ mod tests {
         assert!(p.desbloqueada(Galaxia::TauCeti));
         assert!(!p.desbloqueada(Galaxia::Eridani));
         p.completar(Galaxia::TauCeti);
+        assert!(!p.desbloqueada(Galaxia::Eridani));
+        assert!(p.transmitir_datos());
         assert!(p.desbloqueada(Galaxia::Eridani));
     }
     #[test]

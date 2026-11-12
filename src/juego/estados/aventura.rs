@@ -83,12 +83,14 @@ pub struct Hud {
     pub objetivo: String,
     pub mochila: Vec<([u8; 3], &'static str)>,
     pub instalados: usize,
+    pub transmision: Option<f32>,
     pub fundido: f32,
     pub jugador: (f32, f32, f32), // x, z, yaw (para el minimapa de la estación)
     pub pendientes: Vec<(f32, f32)>, // materiales aún por recoger (posición en la estación)
 }
 
 enum Accion {
+    Transmitir,
     Hablar,
     Instalar,
     Pilotaje,
@@ -141,6 +143,9 @@ pub struct Aventura {
     rocky: Rocky,
     pub encuentro_rocky: EncuentroRocky,
     mundo_blip: Mundo,
+    datos_disponibles: bool,
+    datos_enviados: bool,
+    transmision: Option<f32>,
 }
 
 fn parte_caja(s: V3, mat: Mat, luces: Arc<Vec<Luz>>, amb: V3) -> Parte {
@@ -220,6 +225,9 @@ impl Aventura {
             encuentro_blip: false,
             rocky,
             encuentro_rocky: EncuentroRocky::default(),
+            datos_disponibles: false,
+            datos_enviados: false,
+            transmision: None,
             mundo_blip: Mundo {
                 zonas: vec![Zona::Rect {
                     x0: -1.24,
@@ -246,6 +254,17 @@ impl Aventura {
     }
     pub fn encuentro_blip_realizado(&self) -> bool {
         self.encuentro_blip
+    }
+
+    pub fn sincronizar_datos(&mut self, disponibles: bool, enviados: bool) {
+        self.datos_disponibles = disponibles;
+        self.datos_enviados |= enviados;
+    }
+    pub fn datos_enviados(&self) -> bool {
+        self.datos_enviados
+    }
+    pub fn interacciones_bloqueadas(&self) -> bool {
+        self.encuentro_rocky.bloquea() || self.transmision.is_some()
     }
 
     fn restaurar_sistemas(&mut self) {
@@ -374,7 +393,7 @@ impl Aventura {
 
     // ----------------------------------------------------------- interacciones
     fn candidato(&self) -> Option<Candidato> {
-        if self.encuentro_rocky.bloquea() {
+        if self.interacciones_bloqueadas() {
             return None;
         }
         let (jx, jz) = (self.jugador.x, self.jugador.z);
@@ -390,7 +409,14 @@ impl Aventura {
                     });
                 }
                 let d = dxz(jx, jz, self.pts.nucleo);
-                if d < 2.0 {
+                if d < 2.0 && self.datos_disponibles && !self.datos_enviados {
+                    v.push(Candidato {
+                        dist: d - 1.0,
+                        texto: "Transmitir datos de las taumoebas a la estacion".into(),
+                        accion: Some(Accion::Transmitir),
+                    });
+                }
+                if d < 2.0 && !(self.datos_disponibles && !self.datos_enviados) {
                     let faltan = self.inv.faltan().len();
                     v.push(if !self.inv.mochila.is_empty() {
                         Candidato {
@@ -542,6 +568,12 @@ impl Aventura {
 
     fn ejecutar(&mut self, a: Accion) -> Evento {
         match a {
+            Accion::Transmitir => {
+                if self.datos_disponibles && !self.datos_enviados {
+                    self.transmision = Some(0.0);
+                    self.mensaje("Abriendo enlace con la estacion espacial...");
+                }
+            }
             Accion::Hablar => {
                 self.hablando = 3.5;
                 let l = self.linea_tars();
@@ -633,6 +665,15 @@ impl Aventura {
     // ------------------------------------------------------------- actualización
     pub fn actualizar(&mut self, ent: &EntradaAventura, dt: f32) -> Evento {
         if self.fase == Fase::Inactiva || !dt.is_finite() || dt <= 0.0 {
+            return Evento::Ninguno;
+        }
+        if let Some(t) = &mut self.transmision {
+            *t += dt;
+            if *t >= 4.0 {
+                self.transmision = None;
+                self.datos_enviados = true;
+                self.mensaje("ESTACION: Datos recibidos. Protocolo contra astrofagos confirmado. Ruta a Erid habilitada.");
+            }
             return Evento::Ninguno;
         }
         if self.encuentro_rocky.bloquea() {
@@ -900,7 +941,12 @@ impl Aventura {
 
     // --------------------------------------------------------------------- HUD
     pub fn hud(&self) -> Hud {
-        let objetivo = if self.encuentro_rocky.bloquea() {
+        let objetivo = if self.transmision.is_some() {
+            "Transmitiendo muestras y protocolo. Espera la confirmacion de la estacion.".to_string()
+        } else if self.datos_disponibles && !self.datos_enviados && self.fase == Fase::Nave {
+            "Envia los datos: activa con E la consola del Nucleo, junto al muro de mando derecho."
+                .to_string()
+        } else if self.encuentro_rocky.bloquea() {
             "Habla con Rocky: E / Enter para continuar".to_string()
         } else if self.encuentro_rocky.etapa == Etapa::Guiando
             && (self.fase == Fase::TunelBlip || self.encuentro_rocky.en_nave)
@@ -977,6 +1023,7 @@ impl Aventura {
                 })
                 .collect(),
             instalados: self.inv.instalados.len(),
+            transmision: self.transmision.map(|t| (t / 4.0).clamp(0.0, 1.0)),
             fundido: self.fundido(),
             jugador: (self.jugador.x, self.jugador.z, self.jugador.yaw),
             pendientes,
@@ -987,6 +1034,51 @@ impl Aventura {
 #[cfg(test)]
 mod pruebas {
     use super::*;
+    #[test]
+    fn transmision_requiere_datos_y_confirma_una_sola_vez() {
+        use crate::progreso::{Galaxia, Progreso};
+        let mut p = Progreso::default();
+        assert!(!p.transmitir_datos());
+        p.completar_estacion();
+        p.completar_marte();
+        p.completar(Galaxia::Gargantua);
+        p.viajar(Galaxia::TauCeti);
+        let mut a = Aventura::nueva();
+        a.entrar_cabina(V3::ZERO, v3(0.0, 0.0, -1.0), v3(0.0, 1.0, 0.0), true);
+        a.jugador.colocar(a.pts.nucleo.x, a.pts.nucleo.z, 0.0);
+        assert!(!a.candidato().unwrap().texto.contains("Transmitir"));
+        p.completar(Galaxia::TauCeti);
+        assert!(!p.desbloqueada(Galaxia::Eridani));
+        a.sincronizar_datos(true, false);
+        assert!(a.candidato().unwrap().texto.contains("Transmitir"));
+        interactuar(&mut a);
+        assert!(a.interacciones_bloqueadas());
+        avanzar(&mut a, 2.0);
+        assert!(!a.datos_enviados());
+        interactuar(&mut a);
+        avanzar(&mut a, 2.1);
+        assert!(a.datos_enviados());
+        assert!(!a.interacciones_bloqueadas());
+        assert!(p.transmitir_datos());
+        assert!(!p.transmitir_datos());
+        assert!(p.viajar(Galaxia::Eridani));
+        let mut f = crate::final_erid::FinalErid::nuevo(false);
+        f.actualizar(5.1, &EntradaJ::default());
+        assert!(!f.completado() && !p.completada(Galaxia::Eridani));
+        for _ in 0..crate::final_erid::DIALOGOS.len() {
+            f.continuar();
+        }
+        assert!(f.completado());
+        assert!(p.completar(Galaxia::Eridani));
+        assert!(p.viajar(Galaxia::TauCeti));
+        a.suspender();
+        a.entrar_cabina(V3::ZERO, v3(0.0, 0.0, -1.0), v3(0.0, 1.0, 0.0), true);
+        a.sincronizar_datos(true, p.datos_enviados());
+        a.jugador.colocar(a.pts.nucleo.x, a.pts.nucleo.z, 0.0);
+        assert!(!a.candidato().unwrap().texto.contains("Transmitir"));
+        let nueva = Progreso::default();
+        assert!(!nueva.datos_enviados() && !nueva.completada(Galaxia::Eridani));
+    }
     #[test]
     fn blip_requiere_recorrer_el_pasillo_hasta_el_cristal_y_permite_volver() {
         use crate::{

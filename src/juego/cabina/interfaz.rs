@@ -87,14 +87,14 @@ impl VisorInterior {
         aj: &Ajustes,
         dt: f32,
     ) -> Evento {
-        let salir = !a.encuentro_rocky.bloquea()
+        let salir = !a.interacciones_bloqueadas()
             && (window.is_key_pressed(KeyboardKey::KEY_X)
                 || window.is_key_pressed(KeyboardKey::KEY_ESCAPE)
                 || (a.en_crucero() && window.is_key_pressed(KeyboardKey::KEY_H)));
         if window.is_key_pressed(KeyboardKey::KEY_TAB) {
             self.mouse = !self.mouse;
         }
-        if !a.encuentro_rocky.bloquea() && window.is_key_pressed(KeyboardKey::KEY_I) {
+        if !a.interacciones_bloqueadas() && window.is_key_pressed(KeyboardKey::KEY_I) {
             self.inventario = !self.inventario;
         }
         if self.mouse {
@@ -311,6 +311,18 @@ impl VisorInterior {
                     cian,
                 );
             }
+        }
+        if let Some(progreso) = hud.transmision {
+            l.rect(250.0, 480.0, 780.0, 105.0, Color::new(5, 17, 26, 245));
+            l.texto(
+                "ENLACE CON LA ESTACION / ENVIANDO DATOS",
+                275.0,
+                500.0,
+                22.0,
+                cian,
+            );
+            l.rect(275.0, 550.0, 730.0, 12.0, Color::DARKGRAY);
+            l.rect(275.0, 550.0, 730.0 * progreso, 12.0, cian);
         }
         if let Some(linea) = hud.dialogo.or(hud.comentario) {
             let modal = hud.dialogo.is_some();
