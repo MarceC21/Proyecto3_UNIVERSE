@@ -8,9 +8,9 @@ use crate::math::*;
 use crate::progreso::Galaxia;
 use crate::shader::*;
 
-pub const RADIO_LIMITE: f32 = 420.0;
-pub const ALTO_LIMITE: f32 = 75.0;
-pub const INICIO: V3 = v3(0.0, 9.0, 380.0);
+pub const RADIO_LIMITE: f32 = 1680.0;
+pub const ALTO_LIMITE: f32 = 300.0;
+pub const INICIO: V3 = v3(0.0, 36.0, 1520.0);
 
 impl Escena {
     pub fn gargantua() -> Self {
@@ -34,15 +34,15 @@ impl Escena {
         let s_baliza = shaders.len(); shaders.push(Box::new(ShaderBaliza));
         let s_brillo = shaders.len(); shaders.push(Box::new(ShaderBrillo));
         let mut cuerpos = Vec::new();
-        // Radios un poco mayores; el mismo presupuesto de triángulos que Solar.
+        // Distancias orbitales x4, radios planetarios intactos y mismo presupuesto de mallas.
         for (i, (nombre, distancia, radio, angulo, inclinacion)) in [
             ("Gargantua", 0.0f32, RADIO_HORIZONTE, 0.0f32, 0.0),
-            ("Miller", 92.0, 7.0, 305.0, 0.12),
-            ("Mann", 145.0, 8.0, 210.0, 0.36),
-            ("Edmunds", 198.0, 8.5, 35.0, 0.45),
-            ("Thalos", 260.0, 11.0, 280.0, 0.52),
-            ("Nyx", 322.0, 9.2, 145.0, 0.18),
-            ("Aurora", 382.0, 9.0, 65.0, 0.38),
+            ("Miller", 368.0, 7.0, 305.0, 0.12),
+            ("Mann", 580.0, 8.0, 210.0, 0.36),
+            ("Edmunds", 792.0, 8.5, 35.0, 0.45),
+            ("Thalos", 1040.0, 11.0, 280.0, 0.52),
+            ("Nyx", 1288.0, 9.2, 580.0, 0.18),
+            ("Aurora", 1528.0, 9.0, 65.0, 0.38),
         ].into_iter().enumerate() {
             let a = angulo.to_radians();
             let orbita = if i == 0 { None } else {
@@ -80,7 +80,9 @@ mod tests {
         assert_eq!(e.cuerpos.len(), 7);
         assert_eq!(e.cuerpos[1].nombre, "Miller");
         assert!(e.cuerpos[0].radio > 18.0);
-        assert!(crate::agujero_negro::RADIO_DISCO + e.cuerpos[1].radio < e.cuerpos[1].pos.len());
+        assert!(e.cuerpos[1].pos.len() - crate::agujero_negro::RADIO_DISCO - e.cuerpos[1].radio > 50.0);
+        assert!(RADIO_HORIZONTE < ALTO_LIMITE);
+        for (p,r) in e.esferas() { assert!((INICIO-p).len() > r+5.0, "llegada obstruida"); }
         assert!(e.cinturon.is_none() && e.estacion.is_none());
         assert!(e.colisionadores_asteroides().is_empty());
         assert_eq!(e.cuerpos[4].anillos.len(), 2);

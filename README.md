@@ -182,10 +182,14 @@ acreción animado y un arco luminoso, todo rasterizado en CPU. Sus seis planetas
 (roca), Thalos (bandas y dos anillos separados), Nyx (fisuras) y Aurora (mares
 y continentes). Las posiciones orbitales permanecen fijas y rotan con `dt`.
 
-No tiene cinturón, asteroides ni estación. El radio del límite es 420 y la altura
-75, frente a 350 y 45 del sistema solar. Los planetas tienen radios entre 7 y 11;
+No tiene cinturón, asteroides ni estación. El radio del límite es **1680**
+(diámetro **3360**) y la altura va de **−300 a +300**: ambas dimensiones se
+cuadruplicaron respecto a la versión anterior (420 y ±75). Los planetas tienen radios entre 7 y 11;
 las mismas tres mallas de esfera y los mipmaps conservan el presupuesto de detalle.
-El skybox usa azul petróleo, turquesa y luz crema, sin la nebulosa violeta de Solar.
+Gargantua conserva su skybox equirectangular, ahora casi negro con unas pocas
+nebulosas frías muy tenues. Las estrellas y el polvo siguen presentes. El cielo
+anterior de azul petróleo, turquesa y luz crema se trasladó completo a Eridani,
+incluidas su distribución de estrellas y su semilla.
 
 Se conservan WASD, ratón, turbo, cámara libre, modo local, colisiones y reaparición.
 Los atajos cambian según el sistema:
@@ -211,13 +215,32 @@ cargo run --release --no-default-features --bin exportar_gargantua -- /tmp/garga
 
 ## Agujero negro y atracción
 
-El horizonte tiene **radio 26** (el sol provisional tenía 18), y el disco luminoso
-alcanza **radio 68** sin invadir Miller, cuya órbita está a 92 unidades del centro.
-Los demás planetas también se han separado hacia fuera. Se conservan las esferas LOD del motor;
+El horizonte tiene **radio 108** (diámetro **216**) y el disco luminoso llega a
+**radio 294** (diámetro **588**): tres veces los radios 36 y 98 que había antes
+del cambio. El radio del Sol del primer sistema es 10; el horizonte de Gargantua
+mide **10.8 veces** ese radio. Las distancias orbitales se cuadruplicaron y los
+radios de los planetas se conservaron para acentuar la escala sin añadir mallas.
+Todas las medidas son unidades artísticas del juego, no kilómetros ni UA.
+
+| Planeta | Distancia al centro de Gargantua | Radio del planeta |
+| --- | ---: | ---: |
+| Miller | 368 | 7 |
+| Mann | 580 | 8 |
+| Edmunds | 792 | 8.5 |
+| Thalos | 1040 | 11 |
+| Nyx | 1288 | 9.2 |
+| Aurora | 1528 | 9 |
+
+En Miller quedan **67 unidades** entre su superficie más cercana y el borde
+exterior del disco: `368 − 7 − 294`. La separación hasta el horizonte es de
+**253 unidades**: `368 − 7 − 108`. La llegada segura y la reaparición están en
+**(0, 36, 1520)**, dentro de la nueva frontera. Las vistas y los exportadores
+ajustan sus cámaras a la escala del agujero. Se conservan las esferas LOD del motor;
 el disco y el arco añaden 514 triángulos. La iluminación de los planetas toma
 el centro del disco como fuente aproximada.
 
-La nave siente una atracción radial dentro de **150 unidades** del centro. La
+La nave siente una atracción radial dentro de **600 unidades** del centro. El parámetro de atracción se ajustó
+a **μ = 162000** (antes 18000) para conservar el control cerca del horizonte mayor. La
 fuerza crece al acercarse y está limitada a 22 unidades de aceleración para
 mantener estable la integración. La física es propia: no se usan motores ni
 funciones de física de raylib. Los controles siguen funcionando; orienta la
@@ -450,7 +473,7 @@ Desde Eridani puedes volver a Tau Ceti o elegir otro sistema ya desbloqueado.
 - **40 Eridani B y C:** compañeras blanca y roja situadas juntas, fuera del
   cinturón. Son cuerpos visibles y sólidos a los que puedes acercarte.
 - Cinturón reproducible de 1500 asteroides entre radios 340 y 376, límite a
-  620 y cielo propio con nebulosas verdes, turquesas y violetas.
+  620 y cielo azul petróleo, turquesa y crema heredado de la versión anterior de Gargantua.
 
 Es una representación artística de tu propuesta: los tamaños y distancias están
 ajustados al juego. Comparte vuelo, cámara, modo local, colisiones, LOD, culling,

@@ -1,5 +1,5 @@
 // Aproximación de juego, en unidades del mundo: atracción radial con caída
-// inversa al cuadrado, alcance finito y aceleración acotada. No usa raylib.
+// inversa al cuadrado, alcance finito y aceleración acotada
 use crate::math::*;
 
 #[derive(Clone, Copy, Debug)]

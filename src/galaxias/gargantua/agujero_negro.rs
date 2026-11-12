@@ -2,8 +2,8 @@
 // artística rasterizada en CPU, sin integración relativista de rayos.
 use crate::{camara::Camara, dibujo::*, gravedad::CampoGravitatorio, malla::{self, Malla}, math::*, shader::*};
 
-pub const RADIO_HORIZONTE: f32 = 26.0; // El sol provisional tenía radio 18.
-pub const RADIO_DISCO: f32 = 68.0;     // Disco más extendido; deja espacio antes de Miller.
+pub const RADIO_HORIZONTE: f32 = 108.0; // Tres veces el radio anterior de 36.
+pub const RADIO_DISCO: f32 = 294.0;     // Disco más extendido; deja espacio antes de Miller.
 
 pub struct AgujeroNegro {
     pub campo: CampoGravitatorio,
@@ -47,7 +47,7 @@ impl Shader for ShaderHalo {
 impl AgujeroNegro {
     pub fn nuevo() -> Self {
         Self { campo: CampoGravitatorio { centro: V3::ZERO, radio_horizonte: RADIO_HORIZONTE,
-            radio_influencia: 150.0, mu: 18000.0, aceleracion_max: 22.0 },
+            radio_influencia: 600.0, mu: 162000.0, aceleracion_max: 22.0 },
             disco: malla::anillo(RADIO_HORIZONTE * 1.07, RADIO_DISCO, 256, 1.0),
             halo: malla::cuadrado(), shader_disco: ShaderDisco, shader_halo: ShaderHalo }
     }
@@ -81,7 +81,7 @@ mod tests {
         let e = Escena::gargantua();
         let cielo = Cielo::gargantua();
         let mut cam = Camara::nueva(320.0, 200.0);
-        cam.pos = v3(0.0, 23.0, 110.0);
+        cam.pos = v3(0.0, RADIO_HORIZONTE * 0.9, RADIO_HORIZONTE * 4.2);
         cam.mirar_a(V3::ZERO);
         let mut fb = Framebuffer::new(320, 200);
         let st = dibujar(&mut fb, &e, &cielo, &cam, 0.0, &Ajustes::default());

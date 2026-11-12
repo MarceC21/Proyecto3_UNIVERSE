@@ -221,7 +221,8 @@ impl Escena {
             } else { 1.0 };
             cam.vista_esfera(c.pos, c.radio * encuadre, self.pos_sol());
             if self.agujero_negro.is_some() && c.nombre == "Gargantua" {
-                cam.pos = v3(0.0, 23.0, 110.0);
+                let r = crate::agujero_negro::RADIO_HORIZONTE;
+                cam.pos = c.pos + v3(0.0, r * 0.9, r * 4.2);
                 cam.mirar_a(c.pos);
             }
             if self.galaxia == Galaxia::Eridani && c.nombre == "Erid" {

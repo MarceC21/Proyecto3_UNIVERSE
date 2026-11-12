@@ -4,7 +4,7 @@ use nave_raster::{camara::Camara, cielo::Cielo, dibujo::Ajustes, escena::Escena,
 use std::{io::Write, time::Instant};
 
 fn guardar(fb: &Framebuffer, ruta: &std::path::Path) {
-    let mut f = std::fs::File::create(ruta).unwrap();
+    let mut f = std::io::BufWriter::new(std::fs::File::create(ruta).unwrap());
     write!(f, "P6\n{} {}\n255\n", fb.width, fb.height).unwrap();
     for p in fb.pixels.chunks_exact(4) { f.write_all(&p[..3]).unwrap(); }
 }
@@ -18,8 +18,9 @@ fn main() {
     let mut fb = Framebuffer::new(960, 600);
     let mut nave = Nave::predeterminada().unwrap();
     let mut vistas = escena.vistas();
-    vistas.push(("agujero_cerca".into(), v3(0.0, 12.0, 65.0), V3::ZERO));
-    vistas.push(("agujero_lateral".into(), v3(85.0, 18.0, 50.0), V3::ZERO));
+    let r = nave_raster::agujero_negro::RADIO_HORIZONTE;
+    vistas.push(("agujero_cerca".into(), v3(0.0, r * 0.5, r * 2.5), V3::ZERO));
+    vistas.push(("agujero_lateral".into(), v3(r * 3.3, r * 0.7, r * 2.0), V3::ZERO));
     let thalos = escena.cuerpos.iter().find(|c| c.nombre == "Thalos").unwrap();
     vistas.push(("doble_anillo".into(), thalos.pos + (escena.pos_sol() - thalos.pos).norm() * 57.0 + v3(0.0, 27.0, 0.0), thalos.pos));
     for (nombre, pos, objetivo) in vistas {

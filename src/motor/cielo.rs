@@ -35,14 +35,12 @@ impl Cielo {
         let eje_galaxia = v3(0.35, 0.85, 0.30).norm();
         let nebulosa = Textura::generar(1024, 512, &|d| {
             if gargantua {
-                // Paleta de Miller: azul petróleo, turquesa, gris y luz crema.
-                let banda = (-(d.dot(v3(0.2, 0.9, -0.3).norm())).powi(2) * 5.0).exp();
-                let a = smoothstep(-0.35, 0.55, fbm(d * 2.2, 5, 701));
-                let b = smoothstep(-0.1, 0.65, fbm(d * 4.2 + v3(5.0, 1.0, 2.0), 4, 702));
-                let luz = smoothstep(0.25, 0.9, d.dot(v3(-0.7, 0.15, 0.6).norm()));
-                return rgb(7.0, 18.0, 31.0) + rgb(37.0, 91.0, 114.0) * a
-                    + rgb(53.0, 105.0, 109.0) * (b * banda)
-                    + rgb(174.0, 153.0, 112.0) * (luz * banda * a * 0.65);
+                // Fondo casi negro, con pocas nubes frías concentradas en filamentos.
+                let n = fbm(d * 2.2, 5, 1701);
+                let mascara = smoothstep(0.18, 0.42, n);
+                let filamento = smoothstep(0.05, 0.35, fbm(d * 4.2 + v3(5.0,1.0,2.0),4,1702));
+                return rgb(1.0, 2.0, 5.0) + rgb(11.0, 16.0, 26.0) * (mascara * filamento)
+                    + rgb(4.0, 6.0, 12.0) * mascara;
             }
             // Degradado base: azul noche -> violeta oscuro.
             let g = d.y * 0.5 + 0.5;
@@ -93,6 +91,19 @@ mod tests {
                 - nuevo.nebulosa.muestrear(i as f32 / 8.0, 0.5, 0.0)).len()
         }).sum();
         assert!(diferencia > 1.0);
+        let eridani = Cielo::eridani();
+        let (mut luz_gargantua, mut luz_eridani, mut claros) = (0.0, 0.0, 0);
+        for y in 0..32 { for x in 0..64 {
+            let uv = (x as f32/64.0, (y as f32+0.5)/32.0);
+            let luminancia = |v: V3| v.dot(v3(0.2126,0.7152,0.0722));
+            let g = luminancia(nuevo.nebulosa.muestrear(uv.0,uv.1,0.0));
+            luz_gargantua += g;
+            luz_eridani += luminancia(eridani.nebulosa.muestrear(uv.0,uv.1,0.0));
+            if g > 0.035 { claros += 1; }
+        }}
+        assert!(luz_gargantua / 2048.0 < 0.025, "el cielo tapa el disco");
+        assert!(claros < 2048/6, "las nebulosas ocupan demasiado cielo");
+        assert!(luz_eridani > luz_gargantua * 6.0, "Eridani debe heredar el cielo luminoso");
         assert_eq!(nuevo.estrellas.len(), solar.estrellas.len());
         assert_eq!(nuevo.polvo.len(), solar.polvo.len());
     }

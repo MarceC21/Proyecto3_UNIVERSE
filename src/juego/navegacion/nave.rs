@@ -413,7 +413,7 @@ mod pruebas {
     fn gravedad_causa_deriva_pero_el_turbo_permite_escapar() {
         let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
         let cuerpos = [(g.centro, g.radio_horizonte)];
-        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: crate::gargantua::RADIO_LIMITE, alto_limite: crate::gargantua::ALTO_LIMITE,
             cinturon: None, gravedad: Some(g) };
         let deriva = |z| {
             let mut n = Nave::fisica();
@@ -421,23 +421,23 @@ mod pruebas {
             for _ in 0..120 { n.actualizar(&Control::default(), 1.0 / 60.0, &m); }
             z - n.pos.z
         };
-        assert!(deriva(100.0) > 0.1);
-        assert!(deriva(45.0) > deriva(100.0) * 3.0);
+        assert!(deriva(g.radio_horizonte * 2.8) > 0.1);
+        assert!(deriva(g.radio_horizonte * 1.25) > deriva(g.radio_horizonte * 2.8) * 3.0);
         let mut n = Nave::fisica();
-        n.teletransportar(v3(0.0, 0.0, 45.0), v3(0.0, 0.0, 100.0));
+        n.teletransportar(v3(0.0, 0.0, g.radio_horizonte * 1.25), v3(0.0, 0.0, g.radio_influencia));
         for _ in 0..180 { n.actualizar(&Control { empuje: 1.0, turbo: true, ..Default::default() }, 1.0 / 60.0, &m); }
-        assert!(n.pos.z > 70.0 && n.destruida == 0.0, "no pudo escapar: {:?}", n.pos);
+        assert!(n.pos.z > g.radio_horizonte * 1.25 + 25.0 && n.destruida == 0.0, "no pudo escapar: {:?}", n.pos);
     }
 
     #[test]
     fn modo_local_no_anula_gravedad_del_agujero_y_cruzar_horizonte_reaparece() {
         let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
         let cuerpos = [(g.centro, g.radio_horizonte)];
-        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: crate::gargantua::RADIO_LIMITE, alto_limite: crate::gargantua::ALTO_LIMITE,
             cinturon: None, gravedad: Some(g) };
         let mut n = Nave::fisica();
         n.establecer_reaparicion(crate::gargantua::INICIO);
-        n.teletransportar(v3(0.0, 0.0, 39.0), V3::ZERO);
+        n.teletransportar(v3(0.0, 0.0, g.radio_horizonte + 9.0), V3::ZERO);
         n.modo_local = true;
         for _ in 0..600 {
             n.actualizar(&Control::default(), 1.0 / 60.0, &m);
@@ -454,12 +454,12 @@ mod pruebas {
     fn trayectoria_gravitatoria_consistente_entre_30_y_144_fps() {
         let g = crate::agujero_negro::AgujeroNegro::nuevo().campo;
         let cuerpos = [(g.centro, g.radio_horizonte)];
-        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: 420.0, alto_limite: 75.0,
+        let m = Mundo { cuerpos: &cuerpos, asteroides: &[], radio_limite: crate::gargantua::RADIO_LIMITE, alto_limite: crate::gargantua::ALTO_LIMITE,
             cinturon: None, gravedad: Some(g) };
         let mut posiciones = vec![];
         for fps in [30, 144] {
             let mut n = Nave::fisica();
-            n.teletransportar(v3(0.0, 0.0, 65.0), V3::ZERO);
+            n.teletransportar(v3(0.0, 0.0, g.radio_horizonte * 1.8), V3::ZERO);
             for _ in 0..fps * 2 { n.actualizar(&Control::default(), 1.0 / fps as f32, &m); }
             posiciones.push(n.pos);
         }

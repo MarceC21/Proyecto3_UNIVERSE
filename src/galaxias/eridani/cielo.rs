@@ -1,39 +1,30 @@
-// Skybox de 40 Eridani: nebulosas verde, turquesa y violeta sobre azul noche.
+// 40 Eridani hereda el skybox anterior de Gargantua: petroleo, turquesa y crema.
 use crate::cielo::{Cielo, Estrella};
 use crate::math::*;
 use crate::ruido::*;
 use crate::textura::Textura;
 
-fn nivel(x: f32, n: f32) -> f32 {
-    let k = x.clamp(0.0, 0.999) * n;
-    let f = k.floor();
-    (f + smoothstep(0.40, 0.60, k - f)) / n
-}
-
 impl Cielo {
     pub fn eridani() -> Cielo {
-        let eje = v3(0.6, 0.3, -0.5).norm();
+        // Antiguo skybox de Gargantua: azul petroleo, turquesa y luz crema.
         let nebulosa = Textura::generar(1024, 512, &|d| {
-            let g = d.y * 0.5 + 0.5;
-            let mut c = mezcla(rgb(4.0, 8.0, 24.0), rgb(10.0, 12.0, 40.0), g);
-            let m = (-(d.dot(eje)).powi(2) * 8.0).exp();
-            let n1 = fbm(d * 1.7, 5, 1201) + m * 0.5;
-            let n2 = fbm(d * 2.5 + v3(5.0, 1.0, -3.0), 5, 1202) + m * 0.45;
-            let n3 = fbm(d * 3.6 + v3(-2.0, 7.0, 4.0), 4, 1203) + m * 0.4;
-            c += rgb(34.0, 150.0, 98.0) * (nivel(smoothstep(0.0, 0.6, n1), 4.0) * 0.6);
-            c += rgb(30.0, 118.0, 150.0) * (nivel(smoothstep(0.05, 0.62, n2), 4.0) * 0.5);
-            c += rgb(88.0, 50.0, 140.0) * (nivel(smoothstep(0.18, 0.75, n3), 3.0) * 0.45);
-            c += rgb(210.0, 120.0, 50.0) * (m * m * 0.08);
-            v3(c.x.min(1.0), c.y.min(1.0), c.z.min(1.0))
+            // Paleta de Miller: azul petróleo, turquesa, gris y luz crema.
+            let banda = (-(d.dot(v3(0.2, 0.9, -0.3).norm())).powi(2) * 5.0).exp();
+            let a = smoothstep(-0.35, 0.55, fbm(d * 2.2, 5, 701));
+            let b = smoothstep(-0.1, 0.65, fbm(d * 4.2 + v3(5.0, 1.0, 2.0), 4, 702));
+            let luz = smoothstep(0.25, 0.9, d.dot(v3(-0.7, 0.15, 0.6).norm()));
+            rgb(7.0, 18.0, 31.0)
+                + rgb(37.0, 91.0, 114.0) * a
+                + rgb(53.0, 105.0, 109.0) * (b * banda)
+                + rgb(174.0, 153.0, 112.0) * (luz * banda * a * 0.65)
         });
-
-        let mut rng = Rng::new(8888);
+        let mut rng = Rng::new(7026);
         let paleta = [
-            rgb(255.0, 255.0, 255.0),
-            rgb(255.0, 226.0, 180.0),
-            rgb(190.0, 255.0, 230.0),
-            rgb(200.0, 220.0, 255.0),
-            rgb(235.0, 210.0, 255.0),
+            rgb(235.0, 241.0, 230.0),
+            rgb(238.0, 215.0, 166.0),
+            rgb(154.0, 217.0, 227.0),
+            rgb(187.0, 218.0, 210.0),
+            rgb(240.0, 231.0, 199.0),
         ];
         let mut estrellas = Vec::new();
         for i in 0..3200 {
